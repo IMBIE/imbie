@@ -1,0 +1,21 @@
+<icesat>
+    <t>2003.75, 2008.75</t>
+    <EAIS>
+        <dmdt>1</dmdt>
+        <dmdt_sd>2</dmdt_sd>
+    </EAIS>
+    <WAIS>
+        <dmdt>3</dmdt>
+        <dmdt_sd>4</dmdt_sd>
+    </WAIS>
+    <APIS>
+        <dmdt>5</dmdt>
+        <dmdt_sd>6</dmdt_sd>
+    </APIS>
+    <GrIS raw="True">
+        <t0>2000, 2003, 2006, 2009</t0>
+        <t1>2002, 2005, 2008, 2011</t1>
+        <dmdt>1, 2, 3, 4</dmdt>
+        <dmdt_sd>5, 6, 7, 8</dmdt_sd>
+    </GrIS>
+</icesat>
