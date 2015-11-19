@@ -114,6 +114,15 @@ class Processor:
 
             save_data(data, fpath)
 
+    def plot_boxes(self, plotter):
+        """
+        Creates a dmdt + error per ice sheet box-plot from the data
+
+        INPUTS:
+            plotter: an imbie.plotting.Plotter instance which will render the plots
+        """
+        plotter.plot_dmdt_ice_sheet_method(*self.data.boxes)
+
     def plot_dmdt(self, plotter):
         """
         Creates dmdt + error vs time plots for each of the four basic ice sheets.
@@ -179,3 +188,4 @@ class Processor:
         self.plot_dmdt(plotter)
         self.plot_cumulative(plotter)
         self.plot_mass(plotter)
+        self.plot_boxes(plotter)

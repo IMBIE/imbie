@@ -32,6 +32,7 @@ class DataCollection:
         self.racmo_loader = RacmoLoader(root)
         self.rignot_loader = RignotLoader(root)
         self.dm_loader = DMLoader(root)
+        self.boxes_loader = BoxesLoader(root)
 
     def read(self):
         """
@@ -44,6 +45,7 @@ class DataCollection:
         self.racmo = self.racmo_loader.read()
         self.rignot = self.rignot_loader.read()
         self.dm = self.dm_loader.read()
+        self.boxes = self.boxes_loader.read()
 
     def get_grace(self, sheet_id, method):
         """

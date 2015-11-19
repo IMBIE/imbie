@@ -4,6 +4,7 @@ from .ra import RALoader
 from .racmo import RacmoLoader
 from .rignot import RignotLoader
 from .dm import DMLoader
+from .boxes import BoxesLoader
 
 __doc__ = """
 This module contains a number of Loader classes.

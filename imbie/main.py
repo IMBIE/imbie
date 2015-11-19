@@ -63,7 +63,7 @@ def main():
 
     # plot the graphs
     if not args.ask or ask_yes_no("Show box plots?"):
-        plotter.plot_03_08_dmdt_ice_sheet_method()
+        processor.plot_boxes(plotter)
     if not args.ask or ask_yes_no("Plot dm/dt?"):
         processor.plot_dmdt(plotter)
     if not args.ask or ask_yes_no("Plot mass?", default="no"):
