@@ -1,48 +1,48 @@
 from .processing import Processor
 from .data import DataCollection
 from .plotting import Plotter
-from .aux_functions import ask, ask_yes_no, parse_config
+from .aux_functions import *
 from .consts import *
 
 from argparse import ArgumentParser
 
 
 def main():
-    parser = ArgumentParser(description="IMBIE 2 Processor")
-    parser.add_argument('-i', '--input', default=None, type=str, help="root directory from which to load input files")
-    parser.add_argument('-o', '--output', default=None, type=str, help="output folder")
-    parser.add_argument('-f', '--format', default=None, type=str, help="output graph format (png/svg/pdf/jpg)")
-    parser.add_argument('-c', '--config', default=None, type=str, help="configuration file")
+    parser = ArgumentParser(prog="IMBIE", description="IMBIE 2 Processor")
+    parser.add_argument('-i', '--input-config', default=None, type=str, help="Input configuration file")
+    parser.add_argument('-o', '--output-config', default=None, type=str, help="Output configuration file")
+    parser.add_argument('-p', '--process-config', default=None, type=str, help="Processing configuration file")
+    parser.add_argument('-g', '--graph-style', default=None, type=str, help="Graph rendering style configuration file")
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-v', '--verbose', action="count", help="increase output verbosity")
     group.add_argument('-s', '--silent', action="store_true", help="do not print any output to the terminal window")
-    parser.add_argument('-a', '--ask', action="store_true", help="configure some parameters via command-line questions")
 
     args = parser.parse_args()
 
-    config = {}
-    if args.config is not None:
-        config = parse_config(args.config)
+    proc_config = {}
+    if args.process_config is not None:
+        proc_config = load_json(args.process_config)
+    in_config = {}
+    if args.input_config is not None:
+        in_config = load_json(args.input_config)
+    out_config = {}
+    if args.output_config is not None:
+        out_config = load_json(args.output_config)
+    plot_config = {}
+    if args.graph_style is not None:
+        plot_config = load_json(args.graph_style)
+
 
     if args.verbose >= 2:
-        config['verbose'] = True
-    if args.ask:
-        config.update({
-            "grace_dmdt_method": ask("Select GRACE dm/dt method:", default="variable", variable=VARIABLE, fixed=FIXED),
-            "reconciliation_method": ask("Select reconciliation method:", default="x4", x3=X3, x4=X4),
-            "random_walk": ask_yes_no("Use random walk?")
-        })
+        proc_config['verbose'] = True
     # create the plotter
-    conf = {
-        # 'figure.figsize': (10, 10),
-        # 'figure.dpi': 160
-    }
-
-    plotter = Plotter(file_type=args.format, path=args.output, **conf)
+    format = out_config.get('plot_format', None)
+    output = out_config.get('output_path', None)
+    plotter = Plotter(file_type=format, path=output, **plot_config)
     # create the DataCollection
-    data = DataCollection(args.input)
+    data = DataCollection(**in_config)
     # initialize the processor
-    processor = Processor(data, **config)
+    processor = Processor(data, **proc_config)
 
     # load & assign the data
     processor.assign()
@@ -56,19 +56,20 @@ def main():
     # save the results
     if args.verbose >= 1:
         processor.print_stats()
-    if args.output is not None:
-        processor.save(args.output)
+    if output is not None and out_config.get('output_files', False):
+        processor.save(output)
         if not args.silent:
             print "saved output"
 
     # plot the graphs
-    if not args.ask or ask_yes_no("Show box plots?"):
+    plots = out_config.get('plots', {})
+    if plots.get('box_plots', False):
         processor.plot_boxes(plotter)
-    if not args.ask or ask_yes_no("Plot dm/dt?"):
+    if plots.get('dmdt_plots', False):
         processor.plot_dmdt(plotter)
-    if not args.ask or ask_yes_no("Plot mass?", default="no"):
+    if plots.get('mass_plots', False):
         processor.plot_mass(plotter)
-    if not args.ask or ask_yes_no("Plot cumulative mass?"):
+    if plots.get('dm_plots', False):
         processor.plot_cumulative(plotter)
     if not args.silent:
         print "completed plots"

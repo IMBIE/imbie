@@ -23,7 +23,7 @@ class DataLoader:
             root: (optional) overrides the default root directory
         """
         if root is not None:
-            self.root = root
+            self.root = os.path.expanduser(root)
         self.data = None
 
     def read_csv(self, fname, header=0, limit=None, delim=None, max_width=None, cast_float=True):

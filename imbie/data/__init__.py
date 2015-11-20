@@ -16,7 +16,7 @@ class DataCollection:
     rignot = None
     dm = None
 
-    def __init__(self, root=None):
+    def __init__(self, **config):
         """
         Initializes the DataCollection, creating Loader
         instances for each input source.
@@ -26,13 +26,27 @@ class DataCollection:
                     load data files.
         """
         # create *Loader instances
-        self.grace_loader = GraceLoader(root)
-        self.icesat_loader = ICESatLoader(root)
-        self.ra_loader = RALoader(root)
-        self.racmo_loader = RacmoLoader(root)
-        self.rignot_loader = RignotLoader(root)
-        self.dm_loader = DMLoader(root)
-        self.boxes_loader = BoxesLoader(root)
+        self.grace_loader = GraceLoader(
+            **config.get('grace', {})
+        )
+        self.icesat_loader = ICESatLoader(
+            **config.get('icesat', {})
+        )
+        self.ra_loader = RALoader(
+            **config.get('ra', {})
+        )
+        self.racmo_loader = RacmoLoader(
+            **config.get('racmo', {})
+        )
+        self.rignot_loader = RignotLoader(
+            **config.get('rignot', {})
+        )
+        self.dm_loader = DMLoader(
+            **config.get('dm', {})
+        )
+        self.boxes_loader = BoxesLoader(
+            **config.get('boxes', {})
+        )
 
     def read(self):
         """

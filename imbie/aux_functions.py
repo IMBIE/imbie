@@ -1,3 +1,4 @@
+import json
 """
 This file contains extra functions which are not part of the main data-processing
 methods of the program.
@@ -135,3 +136,9 @@ def parse_config(fname):
             func = formats[k]
             output[k] = func(val)
     return output
+
+def load_json(fname):
+    out = {}
+    with open(fname) as f:
+        out.update(json.load(f))
+    return out
