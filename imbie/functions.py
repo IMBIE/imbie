@@ -563,3 +563,84 @@ def fit_imbie(x, y, fit=1, x_range=None, sigma=None, width=0, full=False):
             yerr = np.abs(yfit - y)
         return ifit, yfit, yerr
     return ifit
+
+def fit_imbie2(t1, m1, t2, m2, t3, dmdt3, t4, dmdt4, verbose=False):
+    """
+    IMBIE Fitting method 2
+    """
+    tmin = min(
+        np.min(t1), np.min(t2),
+        np.min(t3), np.min(t4)
+    )
+    tmin = np.floor(tmin / 10) * 10.
+
+    Sx1y1 = np.sum((t1 - tmin) * m1)
+    Sx2y2 = np.sum((t2 - tmin) * m2)
+    Sy1 = np.sum(m1)
+    Sy2 = np.sum(m2)
+    Sy3 = np.sum(dmdt3)
+    Sy4 = np.sum(dmdt4)
+    Sx12 = np.sum((t1 - tmin) * (t1 - tmin))
+    Sx22 = np.sum((t2 - tmin) * (t2 - tmin))
+    Sx1 = np.sum(t1 - tmin)
+    Sx2 = np.sum(t2 - tmin)
+
+    m = 2. * (Sx1y1 + Sx2y2 + Sy3 + Sy4 - 2. * Sy1 - 2. * Sy2) /\
+             (Sx12 + Sx22 + 2. + 4. * Sx1 + 4. * Sx2)
+    if verbose:
+        plt.plot(t1, m1, t3, np.cumsum(dmdt3),
+                 t2, m2, t4, np.cumsum(dmdt4))
+        plt.show()
+    return m
+
+def fit_imbie3(t1, m1, t2, m2, t3, m3, t4, m4, verbose=False, full=False):
+    """
+    IMBIE Fitting method 3
+    """
+    tmin = min(
+        np.min(t1), np.min(t2),
+        np.min(t3), np.min(t4)
+    )
+    tmin = np.floor(tmin / 10) * 10.
+
+    n1 = len(t1)
+    n2 = len(t2)
+    n3 = len(t3)
+    n4 = len(t4)
+    Sy1 = np.sum(m1)
+    Sy2 = np.sum(m2)
+    Sy3 = np.sum(m3)
+    Sy4 = np.sum(m4)
+    Sx1 = np.sum(t1 - tmin)
+    Sx2 = np.sum(t2 - tmin)
+    Sx3 = np.sum(t3 - tmin)
+    Sx4 = np.sum(t4 - tmin)
+    Sx1y1 = np.sum((t1 - tmin) * m1)
+    Sx2y2 = np.sum((t2 - tmin) * m2)
+    Sx3y3 = np.sum((t3 - tmin) * m3)
+    Sx4y4 = np.sum((t4 - tmin) * m4)
+    Sx12 = np.sum((t1 - tmin) * (t1 - tmin))
+    Sx22 = np.sum((t2 - tmin) * (t2 - tmin))
+    Sx32 = np.sum((t3 - tmin) * (t3 - tmin))
+    Sx42 = np.sum((t4 - tmin) * (t4 - tmin))
+
+    m = ((Sx1y1 - Sx1 * Sy1) / n1 * n1 + (Sx2y2 - Sx2 * Sy2) / n2 * n2 +
+         (Sx3y3 - Sx3 * Sy3) / n3 * n3 + (Sx4y4 - Sx4 * Sy4) / n4 * n4) /\
+        ((Sx12  - Sx1 * Sx1) / n1 * n1 + (Sx22  - Sx2 * Sx2) / n2 * n2 +
+         (Sx32  - Sx3 * Sx3) / n3 * n3 + (Sx42  - Sx4 * Sx4) / n4 * n4)
+    c1 = (Sy1 - m * Sx1) / n1
+    c2 = (Sy2 - m * Sx2) / n2
+    c3 = (Sy3 - m * Sx3) / n3
+    c4 = (Sy4 - m * Sx4) / n4
+
+    if verbose:
+        plt.plot(
+            t1, m1 - c1,
+            t2, m2 - c2,
+            t3, m3 - c3,
+            t4, m4 - c4
+        )
+        plt.show()
+    if full:
+        return m, c1, c2, c3, c4
+    return m

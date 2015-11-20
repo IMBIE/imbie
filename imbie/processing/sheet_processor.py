@@ -13,6 +13,7 @@ class BaseSheetProcessor:
     grace_dmdt_method = VARIABLE
     random_walk = True
     reconciliation_method = X4
+    fit_method = 1
 
     nsigma = 3
     verbose = False
@@ -204,7 +205,10 @@ class SheetProcessor(BaseSheetProcessor):
         x_max = 2009.
         x_range = (x_min, x_max)
 
-        _, fit, err = fit_imbie(self.ra.t, self.ra.cumul, x_range=x_range, width=13./12, full=True)
+        _, fit, err = fit_imbie(
+            self.ra.t, self.ra.cumul, fit=self.fit_method,
+            x_range=x_range, width=13./12, full=True
+        )
         ok = np.logical_and(self.ra.t >= x_min,
                             self.ra.t <= x_max)
         output_line = "{:7.02f} - {:7.02f}: ({}) +/- {}"
