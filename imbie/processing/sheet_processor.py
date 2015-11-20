@@ -106,11 +106,11 @@ class BaseSheetProcessor:
         returns the ice sheet's data as a python dict
         """
         return OrderedDict([
-            ("t", self.t),
-            ("dmdt", self.dmdt),
-            ("dmdt_sd", self.dmdt_sd),
-            ("cumul", self.cumul),
-            ("cumul_sd", self.cumul_sd)
+            ("Year", self.t),
+            ("dMdt(Gt/yr)", self.dmdt),
+            ("sd(Gt/yr)", self.dmdt_sd),
+            ("dM(Gt)", self.cumul),
+            ("sd(Gt)", self.cumul_sd)
         ])
 
     def print_acceleration_trend(self):
@@ -189,8 +189,6 @@ class SheetProcessor(BaseSheetProcessor):
             d["icesat"] = self.icesat.as_dict()
             if hasattr(self, 'ra'):
                 d["ra"] = self.ra.as_dict()
-        d["data"] = self.data.T
-        d["data_sd"] = self.data_sd.T
 
         return d
 

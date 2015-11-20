@@ -27,8 +27,8 @@ def tabulate(data, headers=False):
                     for i, _ in enumerate(flat):
                         header.append(name+'_'+str(i))
                 else:
-                    header.append(name)
+                    header.append("{:>20}".format(name))
             yield header
         for line in izip(*data.values()):
             line = np.concatenate([np.ravel(item) for item in line])
-            yield line
+            yield ["{: 20f}".format(n) for n in line]
