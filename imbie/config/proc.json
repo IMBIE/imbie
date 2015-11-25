@@ -1,0 +1,6 @@
+{
+	"fit_method": 1,
+	"random_walk": true,
+	"reconciliation_method": "4",
+	"grace_dmdt_method": "v"
+}
