@@ -112,7 +112,7 @@ class Processor:
             fpath = os.path.join(path, fname)
             data = sheet.as_dict()
 
-            save_data(data, fpath, sheet.sheet_id)
+            save_data(data, fpath)
 
     def plot_boxes(self, plotter):
         """

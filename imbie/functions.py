@@ -425,7 +425,7 @@ def ts_combine(t, y, nsigma=0, error=False, average=False, verbose=False, ret_da
     data_out.fill(np.NAN)
 
     data_out[:, 0] = t1
-    for i in range(np.max(_id)):
+    for i in range(1, np.max(_id) + 1):
         # find valid data-points where the id matches the current input seq. being worked on
         ok = np.logical_and(
             _id == i, np.isfinite(y)

@@ -27,7 +27,8 @@ def tabulate(data, headers=False, name=None):
                 flat = np.ravel(item)
                 if len(flat) > 1:
                     for i, _ in enumerate(flat):
-                        header.append(name+'_'+str(i))
+                        n = name + '_' + str(i)
+                        header.append("{:>20}".format(n))
                 else:
                     header.append("{:>20}".format(name))
             yield header

@@ -151,7 +151,7 @@ class SheetProcessor(BaseSheetProcessor):
     def __init__(self, sheet_id, data_collection, **config):
         """
         Initializes the sheet processor. In addition to the basic SheetProcessor
-        init, this method also retreives data from the provided DataCollection instance.
+        init, this method also retrieves data from the provided DataCollection instance.
 
         INPUTS:
             sheet_id: the abbreviated name of the ice sheet
@@ -190,6 +190,8 @@ class SheetProcessor(BaseSheetProcessor):
             d["icesat"] = self.icesat.as_dict()
             if hasattr(self, 'ra'):
                 d["ra"] = self.ra.as_dict()
+        d["data"] = self.data.T
+        d["data_sd"] = self.data_sd.T
 
         return d
 
