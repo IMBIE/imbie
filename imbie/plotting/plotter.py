@@ -194,7 +194,7 @@ class Plotter:
                 mpatches.Patch(color=color, label=source_id)
             )
         # create legend
-        l = plt.legend(handles=patches)
+        l = plt.legend(patches, source_order)
         # colorize text of items in legend
         for text, patch in zip(l.get_texts(), l.get_patches()):
             # get the color of the patch
