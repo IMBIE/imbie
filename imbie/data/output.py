@@ -2,6 +2,7 @@ import numpy as np
 import csv
 from itertools import izip
 
+
 def save_data(data, fpath, name=None):
     """
     saves the ice sheet's data to the specified file.
@@ -11,6 +12,7 @@ def save_data(data, fpath, name=None):
 
         for line in tabulate(data, headers=True, name=name):
             wr.writerow(line)
+
 
 def tabulate(data, headers=False, name=None):
         """

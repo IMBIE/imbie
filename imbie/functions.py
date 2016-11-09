@@ -468,7 +468,7 @@ def ts_combine(t, y, nsigma=0, error=False, average=False, verbose=False, ret_da
     if error:
         y1 = np.sqrt(y1 / c11) / np.sqrt(c11)
     else:
-        y1 = y1 / c11
+        y1 /= c11
 
     # find any locations where no values were found
     ok = (c1 == 0)
@@ -564,6 +564,7 @@ def fit_imbie(x, y, fit=1, x_range=None, sigma=None, width=0, full=False):
         return ifit, yfit, yerr
     return ifit
 
+
 def fit_imbie2(t1, m1, t2, m2, t3, dmdt3, t4, dmdt4, verbose=False):
     """
     IMBIE Fitting method 2
@@ -592,6 +593,7 @@ def fit_imbie2(t1, m1, t2, m2, t3, dmdt3, t4, dmdt4, verbose=False):
                  t2, m2, t4, np.cumsum(dmdt4))
         plt.show()
     return m
+
 
 def fit_imbie3(t1, m1, t2, m2, t3, m3, t4, m4, verbose=False, full=False):
     """
