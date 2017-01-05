@@ -1,8 +1,0 @@
-{
-	"output_path": "output/",
-	"output_files": true,
-	"plot_format": "svg",
-	"plots": {
-		"box_plots": true
-	}
-}

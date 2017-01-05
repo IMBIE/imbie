@@ -1,0 +1,2 @@
+from .mass_manager import MassChangeCollectionsManager
+from .rate_manager import MassRateCollectionsManager
