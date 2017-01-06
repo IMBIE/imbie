@@ -21,7 +21,7 @@ def main():
     mass_mgr = MassChangeCollectionsManager()
 
     if len(sys.argv) >= 2:
-        root = sys.argv[1]
+        root = os.path.expanduser(sys.argv[1])
     else: root = None
 
     if len(sys.argv) >= 3:
@@ -69,6 +69,11 @@ def main():
     rate_mgr.merge()
     plotter.sheets_error_bars(rate_mgr, 2003., 2012.)
     # plotter.sheet_methods_average_integrated(rate_mgr, offset_t=2003)
+
+    rate_collection = rate_mgr.as_collection().chunk_series()
+    for group in "RA", "GMB", "IOM":
+        plotter.sheet_methods_contributing_integrated(rate_collection, group)
+        plotter.sheet_methods_contributing_integrated_old(rate_mgr, group)
 
     sys.exit(0)
 

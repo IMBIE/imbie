@@ -3,7 +3,9 @@ import numpy as np
 import math
 
 from imbie2.util.functions import match
+from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.const.basins import BasinGroup
+import imbie2.model as model
 
 
 class MassRateDataSeries(DataSeries):
@@ -123,3 +125,82 @@ class MassRateDataSeries(DataSeries):
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
             a.basin_id, a.basin_area, t0, t1, ar, m, e, comp, merged=True
         )
+
+    def chunk_rates(self):
+        ok = self.t0 == self.t1
+
+        time_chunks = [self.t0[ok]]
+        dmdt_chunks = [self.dMdt[ok]]
+        errs_chunks = [self.dMdt_err[ok]]
+
+        for i in range(len(self)):
+            if ok[i]: continue
+
+            time_chunks.append(
+                np.asarray([self.t0[i], self.t1[i]])
+            )
+            dmdt_chunks.append(
+                np.asarray([self.dMdt[i], self.dMdt[i]])
+            )
+            errs_chunks.append(
+                np.asarray([self.dMdt_err[i], self.dMdt_err[i]])
+            )
+
+        t, dmdt = ts_combine(time_chunks, dmdt_chunks)
+        _, errs = ts_combine(time_chunks, errs_chunks, error=True)
+
+        return WorkingMassRateDataSeries(
+            self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
+            t, self.a, dmdt, errs
+        )
+
+    def integrate(self, offset=None):
+        return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
+
+
+class WorkingMassRateDataSeries(DataSeries):
+    def __init__(self, user, user_group, data_group, basin_group, basin_id,
+                 basin_area, time, area, dmdt, errs, computed=False, merged=False):
+        super().__init__(
+            user, user_group, data_group, basin_group, basin_id, basin_area,
+            computed, merged
+        )
+        self.t = time
+        self.a = area
+        self.dmdt = dmdt
+        self.errs = errs
+
+    @property
+    def min_rate(self):
+        ok = np.isfinite(self.dmdt)
+        return np.min(self.dmdt[ok])
+
+    @property
+    def max_rate(self):
+        ok = np.isfinite(self.dmdt)
+        return np.max(self.dmdt[ok])
+
+    def _get_min_time(self):
+        return np.min(self.t)
+
+    def _get_max_time(self):
+        return np.max(self.t)
+
+    def _set_min_time(self, min_t):
+        ok = self.t >= min_t
+
+        self.t = self.t[ok]
+        self.dmdt = self.dmdt[ok]
+        self.a = self.a[ok]
+        self.errs = self.errs[ok]
+
+    def _set_max_time(self, max_t):
+        ok = self.t <= max_t
+
+        self.t = self.t[ok]
+        self.dmdt = self.dmdt[ok]
+        self.a = self.a[ok]
+        self.errs = self.errs[ok]
+
+    def integrate(self, offset=None):
+        return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)

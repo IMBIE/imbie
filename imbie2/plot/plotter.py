@@ -16,9 +16,11 @@ from collections import OrderedDict
 
 from imbie2.const.basins import *
 from imbie2.const import AverageMethod
+from imbie2.model.collections import MassChangeCollection, MassRateCollection, WorkingMassRateCollection
 from imbie2.util.functions import ts2m, move_av, match, t2m
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.model.managers import MassChangeCollectionsManager, MassRateCollectionsManager
+from imbie2.model.series import *
 
 
 def chunk_rates(series):
@@ -1012,15 +1014,108 @@ class Plotter:
 
     @render_plot
     def sheet_methods_contributing_integrated(self, data, *groups):
+        if not groups:
+            groups = None
+
         for i, sheet in enumerate(IceSheet):
             self.ax = plt.subplot(230 + i + 1)
             self._sheet_methods_contributing_integrated(data, sheet, groups)
+
+        if groups is None:
+            groups = "RA", "GMB", "IOM"
         name = ", ".join(self._group_names[g] for g in groups)
         self.fig.suptitle(name)
         return "sheet_methods_contributing_integrated_"+"_".join(groups)
 
+    @render_plot
+    def sheet_methods_contributing_integrated_old(self, data, *groups):
+        if not groups:
+            groups = None
+
+        for i, sheet in enumerate(IceSheet):
+            self.ax = plt.subplot(230 + i + 1)
+            self._sheet_methods_contributing_integrated_old(data, sheet, groups)
+
+        if groups is None:
+            groups = "RA", "GMB", "IOM"
+        name = ", ".join(self._group_names[g] for g in groups)
+        self.fig.suptitle(name)
+        return "sheet_methods_contributing_integrated_" + "_".join(groups)
 
     def _sheet_methods_contributing_integrated(self,
+        data: WorkingMassRateCollection, sheet: IceSheet, groups=None,
+        yticks=True):
+
+        # get default groups set
+        if groups is None:
+            groups = "RA", "GMB", "IOM"
+
+        # get legible title of sheet
+        title = self._sheet_names[sheet]
+        # get id name of sheet
+        sheet_id = sheet.value
+
+        # set constituent sheets if 'AIS' is selected
+        if sheet == IceSheet.ais:
+            sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
+        # otherwise, just use specified sheet
+        else: sheets = [sheet]
+
+        # get all series for the required set of ice sheets & groups
+        set_data = data.filter(basin_id=sheets, user_group=groups)
+        for group in groups:
+            # get all series for experiment group
+            group_data = set_data.filter(user_group=group)
+            min_t = group_data.min_time()
+            max_t = group_data.max_time()
+
+            mid_t = min_t + (max_t - min_t) / 2.
+
+            # get primary & secondary color for group
+            pcol = style.colours.primary[group]
+            scol = style.colours.secondary[group]
+
+            # if there is no ice-sheet combination, plot the contributing series
+            if len(sheets) == 1:
+
+                for series in group_data.integrate(offset=mid_t):
+                    self.ax.plot(series.t, series.dM, ls='--', color=pcol)
+
+            # create empty group for per-sheet averages of this group
+            group_avgs = WorkingMassRateCollection()
+
+            for sheet in sheets:
+                # add average of all series for sheet & group to collection
+                group_avgs.add_series(
+                    group_data.filter(basin_id=sheet).average()
+                )
+            # sum the collection
+            series = group_avgs.sum().integrate(offset=mid_t)
+            # plot the integrated sum
+            self.ax.plot(series.t, series.dM, color=pcol)
+            self.ax.fill_between(
+                series.t, series.dM-series.dM_err, series.dM+series.dM_err,
+                color=scol, alpha=0.5
+            )
+
+        # get start & end time of common period
+        com_t_min = set_data.concurrent_start()
+        com_t_max = set_data.concurrent_stop()
+        # plot v. lines to show period
+        self.ax.axvline(com_t_min, ls='--', color='k')
+        self.ax.axvline(com_t_max, ls='--', color='k')
+
+        # set title & axis labels
+        self.ax.set_ylabel("Mass Change (Gt)")
+        self.ax.set_title(title)
+        # set x- & y-axis limits
+        self.ax.set_ylim(self._dm0, self._dm1)
+        self.ax.set_xlim(self._time0, self._time1)
+
+        return "sheet_methods_contributing_integrated_" + sheet_id, \
+               {'frameon': False, 'loc': 3}
+
+    def _sheet_methods_contributing_integrated_old(self,
         data: MassRateCollectionsManager, sheet: IceSheet, groups=None,
         yticks=True):
         if groups is None:

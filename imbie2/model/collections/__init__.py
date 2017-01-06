@@ -1,2 +1,2 @@
 from .mass_collection import MassChangeCollection
-from .rate_collection import MassRateCollection
+from .rate_collection import MassRateCollection, WorkingMassRateCollection

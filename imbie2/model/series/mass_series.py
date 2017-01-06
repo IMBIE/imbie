@@ -2,8 +2,9 @@ from .data_series import DataSeries
 import numpy as np
 
 from imbie2.util.functions import ts2m, match
+from imbie2.util.offset import apply_offset
 from imbie2.const.basins import BasinGroup
-
+import imbie2.model as model
 
 class MassChangeDataSeries(DataSeries):
 
@@ -24,8 +25,13 @@ class MassChangeDataSeries(DataSeries):
             computed, merged
         )
         self.t, self.dM = ts2m(time, mass)
-        _, self.a = ts2m(time, area)
+        # _, self.a = ts2m(time, area)
+        self.a = area
         _, self.dM_err = ts2m(time, errs)
+        # self.t = time
+        # self.dM = mass
+        # self.dM_err = errs
+        # self.a = area
 
     def _get_min_time(self):
         return np.min(self.t)
@@ -50,15 +56,29 @@ class MassChangeDataSeries(DataSeries):
         self.dM_err = self.dM_err[ok]
 
     @classmethod
-    def accumulate_mass(cls, rate_data):
-        t = (rate_data.t0 + rate_data.t1) / 2.
-        dM = np.cumsum(rate_data.dMdt) # / 12?
+    def accumulate_mass(cls, rate_data, offset=None):
+        if isinstance(rate_data, model.series.MassRateDataSeries):
+            t = (rate_data.t0 + rate_data.t1) / 2.
+            dM = np.cumsum(rate_data.dMdt) / 12.
+            err = np.cumsum(rate_data.dMdt_err) / 12.
+
+        elif isinstance(rate_data, model.series.WorkingMassRateDataSeries):
+            t = rate_data.t             # t = (rate_data.t[:-1] + rate_data.t[1:]) / 2.
+            dM = np.cumsum(rate_data.dmdt) / 12.
+            err = np.cumsum(rate_data.errs) / 12.
+
+        else: raise TypeError("Rates data expected")
+
+        if offset is not None:
+            dM = apply_offset(t, dM, offset)
 
         return cls(
             rate_data.user, rate_data.user_group, rate_data.data_group, rate_data.basin_group,
-            rate_data.basin_id, rate_data.basin_area, t, rate_data.a, dM, rate_data.dMdt_err,
-            computed=True
+            rate_data.basin_id, rate_data.basin_area, t, rate_data.a, dM, err, computed=True
         )
+
+    def differentiate(self):
+        return model.series.MassRateDataSeries.derive_rates(self).chunk_rates()
 
     def __len__(self):
         return len(self.t)
