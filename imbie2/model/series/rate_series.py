@@ -12,13 +12,13 @@ class MassRateDataSeries(DataSeries):
 
     @property
     def min_rate(self):
-        ok = np.isfinite(self.dMdt)
-        return np.min(self.dMdt[ok])
+        ok = np.isfinite(self.dmdt)
+        return np.min(self.dmdt[ok])
 
     @property
     def max_rate(self):
-        ok = np.isfinite(self.dMdt)
-        return np.max(self.dMdt[ok])
+        ok = np.isfinite(self.dmdt)
+        return np.max(self.dmdt[ok])
 
     def __init__(self, user, user_group, data_group, basin_group, basin_id,
                  basin_area, t_start, t_end, area, rate, errs, computed=False,
@@ -29,8 +29,8 @@ class MassRateDataSeries(DataSeries):
         )
         self.t0 = t_start
         self.t1 = t_end
-        self.dMdt = rate
-        self.dMdt_err = errs
+        self.dmdt = rate
+        self.errs = errs
         self.a = area
 
     def _set_min_time(self, min_t):
@@ -44,8 +44,8 @@ class MassRateDataSeries(DataSeries):
 
         self.t0 = self.t0[ok]
         self.t1 = self.t1[ok]
-        self.dMdt = self.dMdt[ok]
-        self.dMdt_err = self.dMdt_err[ok]
+        self.dmdt = self.dmdt[ok]
+        self.errs = self.errs[ok]
         self.a = self.a[ok]
 
     def _set_max_time(self, max_t):
@@ -59,8 +59,8 @@ class MassRateDataSeries(DataSeries):
 
         self.t0 = self.t0[ok]
         self.t1 = self.t1[ok]
-        self.dMdt = self.dMdt[ok]
-        self.dMdt_err = self.dMdt_err[ok]
+        self.dmdt = self.dmdt[ok]
+        self.errs = self.errs[ok]
         self.a = self.a[ok]
 
     def _get_min_time(self):
@@ -77,12 +77,12 @@ class MassRateDataSeries(DataSeries):
     def derive_rates(cls, mass_data):
         t0 = mass_data.t[:-1]
         t1 = mass_data.t[1:]
-        dmdt = np.diff(mass_data.dM)
+        dmdt = np.diff(mass_data.mass)
         area = (mass_data.a[:-1] + mass_data.a[1:]) / 2.
 
         return cls(
             mass_data.user, mass_data.user_group, mass_data.data_group, mass_data.basin_group,
-            mass_data.basin_id, mass_data.basin_area, t0, t1, area, dmdt, mass_data.dM_err,
+            mass_data.basin_id, mass_data.basin_area, t0, t1, area, dmdt, mass_data.errs,
             computed=True
         )
 
@@ -92,12 +92,12 @@ class MassRateDataSeries(DataSeries):
     @property
     def sigma(self):
         return math.sqrt(
-            np.nanmean(np.square(self.dMdt_err))
+            np.nanmean(np.square(self.errs))
         ) # / math.sqrt(len(self))
 
     @property
     def mean(self):
-        return np.nanmean(self.dMdt)
+        return np.nanmean(self.dmdt)
 
     @classmethod
     def merge(cls, a, b):
@@ -114,9 +114,9 @@ class MassRateDataSeries(DataSeries):
 
         t0 = a.t0[ia]
         t1 = a.t1[ia]
-        m = (a.dMdt[ia] + b.dMdt[ib]) / 2.
-        e = np.sqrt((np.square(a.dMdt_err[ia]) +
-                     np.square(b.dMdt_err[ib])) / 2.)
+        m = (a.dmdt[ia] + b.dmdt[ib]) / 2.
+        e = np.sqrt((np.square(a.errs[ia]) +
+                     np.square(b.errs[ib])) / 2.)
         ar = (a.a[ia] + b.a[ib]) / 2.
 
         comp = a.computed or b.computed
@@ -130,8 +130,8 @@ class MassRateDataSeries(DataSeries):
         ok = self.t0 == self.t1
 
         time_chunks = [self.t0[ok]]
-        dmdt_chunks = [self.dMdt[ok]]
-        errs_chunks = [self.dMdt_err[ok]]
+        dmdt_chunks = [self.dmdt[ok]]
+        errs_chunks = [self.errs[ok]]
 
         for i in range(len(self)):
             if ok[i]: continue
@@ -140,10 +140,10 @@ class MassRateDataSeries(DataSeries):
                 np.asarray([self.t0[i], self.t1[i]])
             )
             dmdt_chunks.append(
-                np.asarray([self.dMdt[i], self.dMdt[i]])
+                np.asarray([self.dmdt[i], self.dmdt[i]])
             )
             errs_chunks.append(
-                np.asarray([self.dMdt_err[i], self.dMdt_err[i]])
+                np.asarray([self.errs[i], self.errs[i]])
             )
 
         t, dmdt = ts_combine(time_chunks, dmdt_chunks)
@@ -204,3 +204,36 @@ class WorkingMassRateDataSeries(DataSeries):
 
     def integrate(self, offset=None):
         return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
+
+    @classmethod
+    def merge(cls, a, b):
+        try:
+            ia, ib = match(a.t, b.t)
+        except IndexError:
+            print(a.user, a.t, b.t)
+        if a.user.lower() == "helm":
+            print(a.t, b.t)
+            print(a.t, b.t)
+            print(ia, ib)
+
+        if len(a) != len(b):
+            return None
+        if len(ia) != len(a) or len(ib) != len(b):
+            return None
+
+        t = a.t[ia]
+        m = (a.dmdt[ia] + b.dmdt[ib]) / 2.
+        e = np.sqrt((np.square(a.errs[ia]) +
+                     np.square(b.errs[ib])) / 2.)
+        # ar = (a.a[ia] + b.a[ib]) / 2.
+        ar = None
+
+        comp = a.computed or b.computed
+
+        return cls(
+            a.user, a.user_group, a.data_group, BasinGroup.sheets,
+            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True
+        )
+
+    def __len__(self):
+        return len(self.t)

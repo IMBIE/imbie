@@ -21,8 +21,8 @@ def coverage_boxes(ax, data, groups=None):
         t_pos = series.min_time
 
         if r_len == 0:
-            r_pos -= series.dMdt_err[0]
-            r_len += series.dMdt_err[0]
+            r_pos -= series.errs[0]
+            r_len += series.errs[0]
 
         if min_t is None or min_t > t_pos:
             min_t = t_pos

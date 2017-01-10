@@ -12,6 +12,6 @@ def basin_scatter(ax, data, marker='o'):
 
         c = colours.primary[series.user_group]
         groups.add(series.user_group)
-        p = ax.scatter(series.t, series.dM,
+        p = ax.scatter(series.t, series.mass,
                        c=c, marker=marker)
     return groups

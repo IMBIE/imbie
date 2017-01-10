@@ -6,14 +6,14 @@ import imbie2.model as model
 
 
 class MassChangeCollection(Collection):
-    def combine(self):
+    def combine(self) -> MassChangeDataSeries:
         b_id = self.series[0].basin_id
         b_st = self.series[0].basin_group
         b_a = self.series[0].basin_area
 
         ts = [series.t for series in self.series]
-        ms = [series.dM for series in self.series]
-        es = [series.dM_err for series in self.series]
+        ms = [series.mass for series in self.series]
+        es = [series.errs for series in self.series]
 
         t, m = ts_combine(ts, ms)
         _, e = ts_combine(ts, es, error=True)
@@ -22,7 +22,12 @@ class MassChangeCollection(Collection):
             None, None, None, b_st, b_id, b_a, t, None, m, e
         )
 
-    def average(self, mode=None):
+    def average(self, mode=None) -> MassChangeDataSeries:
+        if not self.series:
+            return None
+        elif len(self.series) == 1:
+            return self.series[0]
+
         b_id = self.series[0].basin_id
         b_gp = self.series[0].basin_group
         b_a = self.series[0].basin_area
@@ -42,10 +47,9 @@ class MassChangeCollection(Collection):
             if series.data_group != d_gp:
                 d_gp = None
 
-
         ts = [series.t for series in self.series]
-        ms = [series.dM for series in self.series]
-        es = [series.dM_err for series in self.series]
+        ms = [series.mass for series in self.series]
+        es = [series.errs for series in self.series]
 
         t, m = ts_combine(ts, ms) # TODO: averaging modes
         _, e = ts_combine(ts, es, error=True)
@@ -54,7 +58,12 @@ class MassChangeCollection(Collection):
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
         )
 
-    def sum(self):
+    def sum(self) -> MassChangeDataSeries:
+        if not self.series:
+            return None
+        elif len(self.series) == 1:
+            return self.series[0]
+
         b_id = self.series[0].basin_id
         b_gp = self.series[0].basin_group
         b_a = self.series[0].basin_area
@@ -75,8 +84,8 @@ class MassChangeCollection(Collection):
                 d_gp = None
 
         ts = [series.t for series in self.series]
-        ms = [series.dM for series in self.series]
-        es = [series.dM_err for series in self.series]
+        ms = [series.mass for series in self.series]
+        es = [series.errs for series in self.series]
 
         t, m = sum_series(ts, ms)
         _, e = sum_series(ts, es)
@@ -85,7 +94,7 @@ class MassChangeCollection(Collection):
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
         )
 
-    def differentiate(self):
+    def differentiate(self) -> "model.collections.WorkingMassRateCollection":
         out = model.collections.WorkingMassRateCollection()
         for series in self:
             out.add_series(series.differentiate())

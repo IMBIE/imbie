@@ -1,13 +1,14 @@
 from abc import ABCMeta, abstractmethod
-from typing import Sequence
+from typing import Sequence, Iterable
 
+from imbie2.model.series.data_series import DataSeries
 
 class Collection(metaclass=ABCMeta):
 
-    def __init__(self, *series):
+    def __init__(self, *series: Sequence[DataSeries]):
         self.series = list(series)
 
-    def min_time(self):
+    def min_time(self) -> float:
         min_t = None
         for series in self:
             t = series.min_time
@@ -15,7 +16,7 @@ class Collection(metaclass=ABCMeta):
                 min_t = t
         return min_t
 
-    def max_time(self):
+    def max_time(self) -> float:
         max_t = None
         for series in self:
             t = series.max_time
@@ -23,7 +24,7 @@ class Collection(metaclass=ABCMeta):
                 max_t = t
         return max_t
 
-    def concurrent_start(self):
+    def concurrent_start(self) -> float:
         """
         returns earliest time that all series have data
         """
@@ -34,7 +35,7 @@ class Collection(metaclass=ABCMeta):
                 beg_t = t
         return beg_t
 
-    def concurrent_stop(self):
+    def concurrent_stop(self) -> float:
         """
         returns latest time that all series have data
         """
@@ -45,10 +46,10 @@ class Collection(metaclass=ABCMeta):
                 end_t = t
         return end_t
 
-    def add_series(self, series):
+    def add_series(self, series: DataSeries) -> None:
         self.series.append(series)
 
-    def merge(self):
+    def merge(self) -> None:
         rem = []
         new = []
         for a in self:
@@ -71,7 +72,7 @@ class Collection(metaclass=ABCMeta):
         for s in new:
             self.series.append(s)
 
-    def filter(self, **kwargs):
+    def filter(self, **kwargs) -> "Collection":
         out = self.__class__()
         for series in self:
             valid = True
@@ -91,25 +92,31 @@ class Collection(metaclass=ABCMeta):
 
         return out
 
+    def first(self) -> DataSeries:
+        return self.series[0]
+
     @abstractmethod
-    def average(self, mode=None):
+    def average(self, mode=None) -> DataSeries:
         """
         average data of series in collection
         """
         return None
 
     @abstractmethod
-    def sum(self):
+    def sum(self) -> DataSeries:
         """
         sum data of series in collection
         """
         return None
 
-    def __iter__(self):
+    def __iter__(self) -> Iterable[DataSeries]:
         return iter(self.series)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index) -> DataSeries:
         return self.series[index]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.series)
+
+    def __bool__(self):
+        return bool(self.series)

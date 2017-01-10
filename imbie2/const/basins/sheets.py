@@ -11,6 +11,8 @@ class IceSheet(enum.Enum):
     gris = 'gris'
     # all antarctica:
     ais = 'ais'
+    # ais + gris:
+    all = 'all'
 
     @classmethod
     def is_valid(cls, name):

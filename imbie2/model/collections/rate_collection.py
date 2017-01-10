@@ -12,14 +12,14 @@ class MassRateCollection(Collection):
     def sum(self):
         raise NotImplementedError("method not available for raw dm/dt data (chunk this collection first)")
 
-    def chunk_series(self):
+    def chunk_series(self) -> "WorkingMassRateCollection":
         out = WorkingMassRateCollection()
         for series in self:
             chunked = series.chunk_rates()
             out.add_series(chunked)
         return out
 
-    def integrate(self):
+    def integrate(self) -> "model.collections.MassChangeCollection":
         out = model.collections.MassChangeCollection()
         for series in self:
             out.add_series(series.integrate())
@@ -27,7 +27,12 @@ class MassRateCollection(Collection):
         return out
 
 class WorkingMassRateCollection(Collection):
-    def average(self, mode=None):
+    def average(self, mode=None) -> WorkingMassRateDataSeries:
+        if not self.series:
+            return None
+        elif len(self.series) == 1:
+            return self.series[0]
+
         b_id = self.series[0].basin_id
         b_gp = self.series[0].basin_group
         b_a = self.series[0].basin_area
@@ -58,7 +63,12 @@ class WorkingMassRateCollection(Collection):
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
         )
 
-    def sum(self):
+    def sum(self) -> WorkingMassRateDataSeries:
+        if not self.series:
+            return None
+        elif len(self.series) == 1:
+            return self.series[0]
+
         b_id = self.series[0].basin_id
         b_gp = self.series[0].basin_group
         b_a = self.series[0].basin_area
@@ -89,7 +99,7 @@ class WorkingMassRateCollection(Collection):
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
         )
 
-    def integrate(self, offset=None):
+    def integrate(self, offset=None) -> "model.collections.MassChangeCollection":
         out = model.collections.MassChangeCollection()
         for series in self:
             out.add_series(series.integrate(offset=offset))

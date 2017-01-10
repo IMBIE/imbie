@@ -72,8 +72,8 @@ def error_bars(dataset, ice_sheets, basins_group):
                 x0 = x + margin
 
                 # get values
-                sigma = group_data.dMdt_err
-                mean = group_data.dMdt
+                sigma = group_data.errs
+                mean = group_data.dmdt
 
                 # calc. pos and height for double err
                 y0 = mean - (sigma * 2.)

@@ -27,8 +27,8 @@ def chunk_rates(series):
     ok = series.t0 == series.t1
 
     time_chunks = [series.t0[ok]]
-    dmdt_chunks = [series.dMdt[ok]]
-    errs_chunks = [series.dMdt_err[ok]]
+    dmdt_chunks = [series.dmdt[ok]]
+    errs_chunks = [series.errs[ok]]
 
     for i in range(len(series)):
         if ok[i]: continue
@@ -37,10 +37,10 @@ def chunk_rates(series):
             np.asarray([series.t0[i], series.t1[i]])
         )
         dmdt_chunks.append(
-            np.asarray([series.dMdt[i], series.dMdt[i]])
+            np.asarray([series.dmdt[i], series.dmdt[i]])
         )
         errs_chunks.append(
-            np.asarray([series.dMdt_err[i], series.dMdt_err[i]])
+            np.asarray([series.errs[i], series.errs[i]])
         )
 
     t, dmdt = ts_combine(time_chunks, dmdt_chunks)
@@ -123,6 +123,7 @@ class Plotter:
         IceSheet.apis: "Antarctic Peninsula",
         IceSheet.gris: "Greenland",
         IceSheet.ais: "Antarctica",
+        IceSheet.all: "Antarctica & Greenland"
     }
     _group_names = {
         "RA": "Altimetry",
@@ -1079,7 +1080,7 @@ class Plotter:
             if len(sheets) == 1:
 
                 for series in group_data.integrate(offset=mid_t):
-                    self.ax.plot(series.t, series.dM, ls='--', color=pcol)
+                    self.ax.plot(series.t, series.dm, ls='--', color=pcol)
 
             # create empty group for per-sheet averages of this group
             group_avgs = WorkingMassRateCollection()
@@ -1092,9 +1093,9 @@ class Plotter:
             # sum the collection
             series = group_avgs.sum().integrate(offset=mid_t)
             # plot the integrated sum
-            self.ax.plot(series.t, series.dM, color=pcol)
+            self.ax.plot(series.t, series.dm, color=pcol)
             self.ax.fill_between(
-                series.t, series.dM-series.dM_err, series.dM+series.dM_err,
+                series.t, series.dm-series.errs, series.dm+series.errs,
                 color=scol, alpha=0.5
             )
 
@@ -1474,3 +1475,218 @@ class Plotter:
 
         return "sheet_methods_average_rates_"+sheet_id,\
                {'frameon': False, 'loc': 3}
+
+    #### NEW PLOTTING METHODS:
+
+    @render_plot
+    def group_rate_intracomparison(self, group_avgs: WorkingMassRateCollection,
+                                   group_contribs: WorkingMassRateCollection, regions):
+        for i, (name, sheets) in enumerate(regions.items()):
+            self.ax = plt.subplot(230+i+1)
+
+            avg = group_avgs.filter(basin_id=name).average()
+            if avg is None:
+                print(name)
+                continue
+
+            pcol = style.colours.primary[avg.user_group]
+            scol = style.colours.secondary[avg.user_group]
+
+            self.ax.plot(avg.t, avg.dmdt, color=pcol)
+            self.ax.fill_between(
+                avg.t, avg.dmdt - avg.errs, avg.dmdt + avg.errs,
+                color=scol, alpha=.5
+            )
+
+            if len(sheets) == 1:
+                for contrib in group_contribs.filter(basin_id=sheets):
+                    self.ax.plot(contrib.t, contrib.dmdt, color=pcol, ls='--')
+
+            # get start & end time of common period
+            com_t_min = group_contribs.filter(basin_id=sheets).concurrent_start()
+            com_t_max = group_contribs.filter(basin_id=sheets).concurrent_stop()
+            # plot v. lines to show period
+            self.ax.axvline(com_t_min, ls='--', color='k')
+            self.ax.axvline(com_t_max, ls='--', color='k')
+
+            # set title & axis labels
+            self.ax.set_ylabel("Mass Balance (Gt/yr)")
+            self.ax.set_title(self._sheet_names[name])
+            # set x- & y-axis limits
+            self.ax.set_ylim(self._dmdt0, self._dmdt1)
+            self.ax.set_xlim(self._time0, self._time1)
+
+        self.fig.suptitle("dM/dt intracomparison")
+        return "group_rate_intracomparison"
+
+    @render_plot
+    def group_mass_intracomparison(self, group_avgs: MassChangeCollection, group_contribs: MassChangeCollection,
+                                   regions):
+        for i, (name, sheets) in enumerate(regions.items()):
+            self.ax = plt.subplot(230+i+1)
+
+            avg = group_avgs.filter(basin_id=name).average()
+            if avg is None:
+                print(name)
+                continue
+
+            pcol = style.colours.primary[avg.user_group]
+            scol = style.colours.secondary[avg.user_group]
+
+            self.ax.plot(avg.t, avg.dm, color=pcol)
+            self.ax.fill_between(
+                avg.t, avg.dm - avg.errs, avg.dm + avg.errs,
+                color=scol, alpha=.5
+            )
+
+            if len(sheets) == 1:
+                for contrib in group_contribs.filter(basin_id=sheets):
+                    self.ax.plot(contrib.t, contrib.dm, color=pcol, ls='--')
+
+            # get start & end time of common period
+            com_t_min = group_contribs.filter(basin_id=sheets).concurrent_start()
+            com_t_max = group_contribs.filter(basin_id=sheets).concurrent_stop()
+            # plot v. lines to show period
+            self.ax.axvline(com_t_min, ls='--', color='k')
+            self.ax.axvline(com_t_max, ls='--', color='k')
+
+            # set title & axis labels
+            self.ax.set_ylabel("Mass Change (Gt)")
+            self.ax.set_title(self._sheet_names[name])
+            # set x- & y-axis limits
+            self.ax.set_ylim(self._dm0, self._dm1)
+            self.ax.set_xlim(self._time0, self._time1)
+
+        self.fig.suptitle("dM intracomparison")
+        return "group_mass_intracomparison"
+
+    @render_plot
+    def groups_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, group_avgs: WorkingMassRateCollection,
+                                    regions):
+
+        for i, (name, sheets) in enumerate(regions.items()):
+            self.ax = plt.subplot(230+i+1)
+
+            x_avg = region_avgs.filter(basin_id=name).average()
+            if x_avg is None:
+                print(name)
+                continue
+
+            pcol = style.colours.primary["all"]
+            scol = style.colours.secondary["all"]
+
+            self.ax.plot(x_avg.t, x_avg.dmdt, color=pcol)
+            self.ax.fill_between(
+                x_avg.t, x_avg.dmdt - x_avg.errs, x_avg.dmdt + x_avg.errs,
+                color=scol, alpha=.5
+            )
+
+            for g_avg in group_avgs.filter(basin_id=name):
+                pcol = style.colours.primary[g_avg.user_group]
+                scol = style.colours.secondary[g_avg.user_group]
+
+                self.ax.plot(g_avg.t, g_avg.dmdt, color=pcol)
+                self.ax.fill_between(
+                    g_avg.t, g_avg.dmdt - g_avg.errs, g_avg.dmdt + g_avg.errs,
+                    color=scol, alpha=.5
+                )
+
+            # get start & end time of common period
+            com_t_min = group_avgs.concurrent_start()
+            com_t_max = group_avgs.concurrent_stop()
+            # plot v. lines to show period
+            self.ax.axvline(com_t_min, ls='--', color='k')
+            self.ax.axvline(com_t_max, ls='--', color='k')
+
+            # set title & axis labels
+            self.ax.set_ylabel("Mass Balance (Gt/yr)")
+            self.ax.set_title(self._sheet_names[name])
+            # set x- & y-axis limits
+            self.ax.set_ylim(self._dmdt0, self._dmdt1)
+            self.ax.set_xlim(self._time0, self._time1)
+
+        self.fig.suptitle("dM/dt intercomparison")
+        return "groups_rate_intercomparison"
+
+    @render_plot
+    def groups_mass_intercomparison(self, region_avgs: MassChangeCollection, group_avgs: MassChangeCollection,
+                                    regions):
+        for i, (name, sheets) in enumerate(regions.items()):
+            self.ax = plt.subplot(230+i+1)
+
+            x_avg = region_avgs.filter(basin_id=name).average()
+            if x_avg is None:
+                print(name)
+                continue
+
+            pcol = style.colours.primary["all"]
+            scol = style.colours.secondary["all"]
+
+            self.ax.plot(x_avg.t, x_avg.dm, color=pcol)
+            self.ax.fill_between(
+                x_avg.t, x_avg.dm - x_avg.errs, x_avg.dm + x_avg.errs,
+                color=scol, alpha=.5
+            )
+
+            for g_avg in group_avgs.filter(basin_id=name):
+                pcol = style.colours.primary[g_avg.user_group]
+                scol = style.colours.secondary[g_avg.user_group]
+
+                self.ax.plot(g_avg.t, g_avg.dm, color=pcol)
+                self.ax.fill_between(
+                    g_avg.t, g_avg.dm - g_avg.errs, g_avg.dm + g_avg.errs,
+                    color=scol, alpha=.5
+                )
+
+            # get start & end time of common period
+            com_t_min = group_avgs.concurrent_start()
+            com_t_max = group_avgs.concurrent_stop()
+            # plot v. lines to show period
+            self.ax.axvline(com_t_min, ls='--', color='k')
+            self.ax.axvline(com_t_max, ls='--', color='k')
+
+            # set title & axis labels
+            self.ax.set_ylabel("Mass Change (Gt)")
+            self.ax.set_title(self._sheet_names[name])
+            # set x- & y-axis limits
+            self.ax.set_ylim(self._dm0, self._dm1)
+            self.ax.set_xlim(self._time0, self._time1)
+
+        self.fig.suptitle("dM intercomparison")
+        return "groups_mass_intercomparison"
+
+    @render_plot_with_legend
+    def regions_mass_intercomparison(self, region_avgs: MassChangeCollection, *regions: Sequence[IceSheet]):
+        pcols = cycle(["#531A59", "#1B8C6F", "#594508"])
+        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D"])
+
+        for region, pcol, scol in zip(regions, pcols, scols):
+            avg = region_avgs.filter(basin_id=region).average()
+
+            self.ax.plot(avg.t, avg.dm, color=pcol)
+            self.ax.fill_between(
+                avg.t, avg.dm-avg.errs, avg.dm+avg.errs,
+                color=scol, alpha=.5
+            )
+            self.labels.append(
+                self._sheet_names[region]
+            )
+            self.glyphs.append(
+                self.colour_glyph(pcol)
+            )
+
+        # get start & end time of common period
+        com_t_min = region_avgs.concurrent_start()
+        com_t_max = region_avgs.concurrent_stop()
+        # plot v. lines to show period
+        self.ax.axvline(com_t_min, ls='--', color='k')
+        self.ax.axvline(com_t_max, ls='--', color='k')
+
+        # set title & axis labels
+        self.ax.set_ylabel("Mass Change (Gt)")
+        self.ax.set_title("Intercomparison of Regions")
+        # set x- & y-axis limits
+        self.ax.set_ylim(self._dm0, self._dm1)
+        self.ax.set_xlim(self._time0, self._time1)
+
+        return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}

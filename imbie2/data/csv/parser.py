@@ -410,11 +410,11 @@ if __name__ == "__main__":
             for basin in data:
                 plt.fill_between(
                     basin.t,
-                    basin.dM-basin.dM_err,
-                    basin.dM+basin.dM_err,
+                    basin.mass-basin.errs,
+                    basin.mass+basin.errs,
                     alpha=0.5
                 )
-                plt.plot(basin.t, basin.dM, 'b-')
+                plt.plot(basin.t, basin.mass, 'b-')
                 plt.grid()
 
                 plt.title(basin.basin_id.value)

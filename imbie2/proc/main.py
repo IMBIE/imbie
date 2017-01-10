@@ -11,13 +11,13 @@ import matplotlib.lines as mlines
 from matplotlib import markers
 import sys, os
 from itertools import chain
-
+from .process import process
 
 def main():
     logging.basicConfig(level=logging.CRITICAL)
     # rate_mgr = MassRateCollectionsManager(2002., 2012.)
     # mass_mgr = MassChangeCollectionsManager(2002., 2012.)
-    rate_mgr = MassRateCollectionsManager(2003., 2012.)
+    rate_mgr = MassRateCollectionsManager() # 2003., 2012.
     mass_mgr = MassChangeCollectionsManager()
 
     if len(sys.argv) >= 2:
@@ -66,7 +66,10 @@ def main():
     # main_sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris]
     # plotter.sheets_time_bars(rate_mgr, main_sheets, list(names))
 
-    rate_mgr.merge()
+    # rate_mgr.merge()
+    process(rate_mgr.as_collection())
+    sys.exit(0)
+
     plotter.sheets_error_bars(rate_mgr, 2003., 2012.)
     # plotter.sheet_methods_average_integrated(rate_mgr, offset_t=2003)
 
@@ -282,7 +285,7 @@ def main_old():
                 for series in collection:
                     if series.computed: continue
                     c = colours[series.user_group]
-                    p = ax.scatter(series.t, series.dM,
+                    p = ax.scatter(series.t, series.mass,
                                    c=c, marker=s)
 
                 if p is not None:
@@ -338,8 +341,8 @@ def main_old():
             t_pos = series.min_time
 
             if r_len == 0:
-                r_pos -= series.dMdt_err[0]
-                r_len += series.dMdt_err[0]
+                r_pos -= series.errs[0]
+                r_len += series.errs[0]
 
             if min_t is None or min_t > t_pos:
                 min_t = t_pos
