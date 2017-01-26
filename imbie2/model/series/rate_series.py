@@ -180,6 +180,16 @@ class WorkingMassRateDataSeries(DataSeries):
         ok = np.isfinite(self.dmdt)
         return np.max(self.dmdt[ok])
 
+    @property
+    def sigma(self):
+        return math.sqrt(
+            np.nanmean(np.square(self.errs))
+        )  # / math.sqrt(len(self))
+
+    @property
+    def mean(self):
+        return np.nanmean(self.dmdt)
+
     def _get_min_time(self):
         return np.min(self.t)
 

@@ -67,7 +67,8 @@ def main():
     # plotter.sheets_time_bars(rate_mgr, main_sheets, list(names))
 
     # rate_mgr.merge()
-    process(rate_mgr.as_collection())
+    rate_col = rate_mgr.as_collection()
+    process(rate_col)
     sys.exit(0)
 
     plotter.sheets_error_bars(rate_mgr, 2003., 2012.)

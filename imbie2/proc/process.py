@@ -1,6 +1,7 @@
 from imbie2.const.basins import IceSheet
 from imbie2.model.collections import WorkingMassRateCollection, MassChangeCollection, MassRateCollection
 from imbie2.plot.plotter import Plotter
+from imbie2.plot.table import MeanErrorsTable, TimeCoverageTable
 
 from collections import OrderedDict
 
@@ -22,6 +23,13 @@ def process(input_data: MassRateCollection):
     rate_data = input_data.chunk_series()
     rate_data.merge()
     mass_data = rate_data.integrate(offset=offset)
+
+    met = MeanErrorsTable(rate_data)
+    print(met)
+
+    for group in groups:
+        tct = TimeCoverageTable(rate_data.filter(user_group=group))
+        print(tct)
 
     groups_sheets_rate = WorkingMassRateCollection()
     groups_sheets_mass = MassChangeCollection()
