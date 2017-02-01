@@ -4,25 +4,27 @@ import math
 
 from imbie2.util.functions import match
 from imbie2.util.combine import weighted_combine as ts_combine
-from imbie2.const.basins import BasinGroup
+from imbie2.const.basins import BasinGroup, Basin
 import imbie2.model as model
+
+from typing import Optional
 
 
 class MassRateDataSeries(DataSeries):
 
     @property
-    def min_rate(self):
+    def min_rate(self) -> None:
         ok = np.isfinite(self.dmdt)
         return np.min(self.dmdt[ok])
 
     @property
-    def max_rate(self):
+    def max_rate(self) -> None:
         ok = np.isfinite(self.dmdt)
         return np.max(self.dmdt[ok])
 
-    def __init__(self, user, user_group, data_group, basin_group, basin_id,
-                 basin_area, t_start, t_end, area, rate, errs, computed=False,
-                 merged=False):
+    def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
+                 basin_group: BasinGroup, basin_id: Basin, basin_area: float, t_start: np.ndarray, t_end: np.ndarray,
+                 area: np.ndarray, rate: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
             computed, merged
@@ -33,7 +35,7 @@ class MassRateDataSeries(DataSeries):
         self.errs = errs
         self.a = area
 
-    def _set_min_time(self, min_t):
+    def _set_min_time(self, min_t: float) -> None:
         ok = np.ones(self.t0.shape, dtype=bool)
 
         for i, t0 in enumerate(self.t0):
@@ -48,7 +50,7 @@ class MassRateDataSeries(DataSeries):
         self.errs = self.errs[ok]
         self.a = self.a[ok]
 
-    def _set_max_time(self, max_t):
+    def _set_max_time(self, max_t: float) -> None:
         ok = np.ones(self.t0.shape, dtype=bool)
 
         for i, t1 in enumerate(self.t1):
@@ -63,18 +65,18 @@ class MassRateDataSeries(DataSeries):
         self.errs = self.errs[ok]
         self.a = self.a[ok]
 
-    def _get_min_time(self):
+    def _get_min_time(self) -> float:
         return min(np.min(self.t1), np.min(self.t0))
 
-    def _get_max_time(self):
+    def _get_max_time(self) -> float:
         return max(np.max(self.t1), np.max(self.t0))
 
     @property
-    def t(self):
+    def t(self) -> np.ndarray:
         return (self.t0 + self.t1) / 2
 
     @classmethod
-    def derive_rates(cls, mass_data):
+    def derive_rates(cls, mass_data: "model.series.MassChangeDataSeries") -> "MassRateDataSeries":
         t0 = mass_data.t[:-1]
         t1 = mass_data.t[1:]
         dmdt = np.diff(mass_data.mass)
@@ -86,26 +88,22 @@ class MassRateDataSeries(DataSeries):
             computed=True
         )
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.t0)
 
     @property
-    def sigma(self):
+    def sigma(self) -> float:
         return math.sqrt(
             np.nanmean(np.square(self.errs))
         ) # / math.sqrt(len(self))
 
     @property
-    def mean(self):
+    def mean(self) -> float:
         return np.nanmean(self.dmdt)
 
     @classmethod
-    def merge(cls, a, b):
+    def merge(cls, a: "MassRateDataSeries", b: "MassRateDataSeries") -> "MassRateDataSeries":
         ia, ib = match(a.t0, b.t0)
-        if a.user.lower() == "helm":
-            print(a.t0, b.t0)
-            print(a.t1, b.t1)
-            print(ia, ib)
 
         if len(a) != len(b):
             return None
@@ -126,7 +124,7 @@ class MassRateDataSeries(DataSeries):
             a.basin_id, a.basin_area, t0, t1, ar, m, e, comp, merged=True
         )
 
-    def chunk_rates(self):
+    def chunk_rates(self) -> "WorkingMassRateDataSeries":
         ok = self.t0 == self.t1
 
         time_chunks = [self.t0[ok]]
@@ -154,13 +152,14 @@ class MassRateDataSeries(DataSeries):
             t, self.a, dmdt, errs
         )
 
-    def integrate(self, offset=None):
+    def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
         return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
 
 
 class WorkingMassRateDataSeries(DataSeries):
-    def __init__(self, user, user_group, data_group, basin_group, basin_id,
-                 basin_area, time, area, dmdt, errs, computed=False, merged=False):
+    def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
+                 basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
+                 dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
             computed, merged
@@ -171,32 +170,32 @@ class WorkingMassRateDataSeries(DataSeries):
         self.errs = errs
 
     @property
-    def min_rate(self):
+    def min_rate(self) -> float:
         ok = np.isfinite(self.dmdt)
         return np.min(self.dmdt[ok])
 
     @property
-    def max_rate(self):
+    def max_rate(self) -> float:
         ok = np.isfinite(self.dmdt)
         return np.max(self.dmdt[ok])
 
     @property
-    def sigma(self):
+    def sigma(self) -> float:
         return math.sqrt(
             np.nanmean(np.square(self.errs))
         )  # / math.sqrt(len(self))
 
     @property
-    def mean(self):
+    def mean(self) -> float:
         return np.nanmean(self.dmdt)
 
-    def _get_min_time(self):
+    def _get_min_time(self) -> float:
         return np.min(self.t)
 
-    def _get_max_time(self):
+    def _get_max_time(self) -> float:
         return np.max(self.t)
 
-    def _set_min_time(self, min_t):
+    def _set_min_time(self, min_t: float) -> None:
         ok = self.t >= min_t
 
         self.t = self.t[ok]
@@ -204,7 +203,7 @@ class WorkingMassRateDataSeries(DataSeries):
         self.a = self.a[ok]
         self.errs = self.errs[ok]
 
-    def _set_max_time(self, max_t):
+    def _set_max_time(self, max_t: float) -> None:
         ok = self.t <= max_t
 
         self.t = self.t[ok]
@@ -212,11 +211,11 @@ class WorkingMassRateDataSeries(DataSeries):
         self.a = self.a[ok]
         self.errs = self.errs[ok]
 
-    def integrate(self, offset=None):
+    def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
         return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
 
     @classmethod
-    def merge(cls, a, b):
+    def merge(cls, a: "WorkingMassRateDataSeries", b: "WorkingMassRateDataSeries") -> "WorkingMassRateDataSeries":
         try:
             ia, ib = match(a.t, b.t)
         except IndexError:
@@ -245,5 +244,5 @@ class WorkingMassRateDataSeries(DataSeries):
             a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True
         )
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.t)

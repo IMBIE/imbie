@@ -1070,15 +1070,15 @@ class Plotter:
             pcol = style.colours.primary[avg.user_group]
             scol = style.colours.secondary[avg.user_group]
 
-            self.ax.plot(avg.t, avg.dm, color=pcol)
+            self.ax.plot(avg.t, avg.mass, color=pcol)
             self.ax.fill_between(
-                avg.t, avg.dm - avg.errs, avg.dm + avg.errs,
+                avg.t, avg.mass - avg.errs, avg.mass + avg.errs,
                 color=scol, alpha=.5
             )
 
             if len(sheets) == 1:
                 for contrib in group_contribs.filter(basin_id=sheets):
-                    self.ax.plot(contrib.t, contrib.dm, color=pcol, ls='--')
+                    self.ax.plot(contrib.t, contrib.mass, color=pcol, ls='--')
 
             # get start & end time of common period
             com_t_min = group_contribs.filter(basin_id=sheets).concurrent_start()
@@ -1159,9 +1159,9 @@ class Plotter:
             pcol = style.colours.primary["all"]
             scol = style.colours.secondary["all"]
 
-            self.ax.plot(x_avg.t, x_avg.dm, color=pcol)
+            self.ax.plot(x_avg.t, x_avg.mass, color=pcol)
             self.ax.fill_between(
-                x_avg.t, x_avg.dm - x_avg.errs, x_avg.dm + x_avg.errs,
+                x_avg.t, x_avg.mass - x_avg.errs, x_avg.mass + x_avg.errs,
                 color=scol, alpha=.5
             )
 
@@ -1169,9 +1169,9 @@ class Plotter:
                 pcol = style.colours.primary[g_avg.user_group]
                 scol = style.colours.secondary[g_avg.user_group]
 
-                self.ax.plot(g_avg.t, g_avg.dm, color=pcol)
+                self.ax.plot(g_avg.t, g_avg.mass, color=pcol)
                 self.ax.fill_between(
-                    g_avg.t, g_avg.dm - g_avg.errs, g_avg.dm + g_avg.errs,
+                    g_avg.t, g_avg.mass - g_avg.errs, g_avg.mass + g_avg.errs,
                     color=scol, alpha=.5
                 )
 
@@ -1200,9 +1200,9 @@ class Plotter:
         for region, pcol, scol in zip(regions, pcols, scols):
             avg = region_avgs.filter(basin_id=region).average()
 
-            self.ax.plot(avg.t, avg.dm, color=pcol)
+            self.ax.plot(avg.t, avg.mass, color=pcol)
             self.ax.fill_between(
-                avg.t, avg.dm-avg.errs, avg.dm+avg.errs,
+                avg.t, avg.mass-avg.errs, avg.mass+avg.errs,
                 color=scol, alpha=.5
             )
             self.labels.append(

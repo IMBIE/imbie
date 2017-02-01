@@ -4,8 +4,13 @@ from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.util.sum_series import sum_series
 import imbie2.model as model
 
+from typing import Iterator
+
 
 class MassChangeCollection(Collection):
+    def __iter__(self) -> Iterator[MassChangeDataSeries]:
+        return super().__iter__()
+
     def combine(self) -> MassChangeDataSeries:
         b_id = self.series[0].basin_id
         b_st = self.series[0].basin_group
@@ -99,3 +104,6 @@ class MassChangeCollection(Collection):
         for series in self:
             out.add_series(series.differentiate())
         return out
+
+    def filter(self, **kwargs) -> "MassChangeCollection":
+        return super().filter(**kwargs)

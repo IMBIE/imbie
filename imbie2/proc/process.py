@@ -21,15 +21,9 @@ def process(input_data: MassRateCollection):
     offset = 2003.
 
     rate_data = input_data.chunk_series()
+
     rate_data.merge()
     mass_data = rate_data.integrate(offset=offset)
-
-    met = MeanErrorsTable(rate_data)
-    print(met)
-
-    for group in groups:
-        tct = TimeCoverageTable(rate_data.filter(user_group=group))
-        print(tct)
 
     groups_sheets_rate = WorkingMassRateCollection()
     groups_sheets_mass = MassChangeCollection()
@@ -94,7 +88,14 @@ def process(input_data: MassRateCollection):
             region_rate.integrate(offset=offset)
         )
 
+    # print tables
 
+    met = MeanErrorsTable(rate_data)
+    print(met)
+
+    for group in groups:
+        tct = TimeCoverageTable(rate_data.filter(user_group=group))
+        print(tct)
 
     # draw plots
     plotter = Plotter()

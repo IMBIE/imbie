@@ -1,5 +1,4 @@
 import enum
-from .groups import BasinGroup
 
 
 class IceSheet(enum.Enum):
@@ -15,7 +14,7 @@ class IceSheet(enum.Enum):
     all = 'all'
 
     @classmethod
-    def is_valid(cls, name):
+    def is_valid(cls, name: str) -> bool:
         name = name.split(':')[-1].strip()
 
         if name in cls.__members__:
@@ -25,7 +24,7 @@ class IceSheet(enum.Enum):
         return False
 
     @classmethod
-    def get_basin(cls, name):
+    def get_basin(cls, name: str) -> "IceSheet":
         name = name.split(':')[-1].strip()
 
         if name == 'gis':

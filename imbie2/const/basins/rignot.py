@@ -1,17 +1,16 @@
 import enum
-from .groups import BasinGroup
 from .sheets import IceSheet
 
 
 class RignotBasin(enum.Enum):
     @classmethod
-    def parse(cls, value):
+    def parse(cls, value: str) -> "RignotBasin":
         value = value.upper()
         value = value.split(':')[-1].strip()
         return cls(value)
 
     @classmethod
-    def sheet(cls, sheet):
+    def sheet(cls, sheet: IceSheet) -> "RignotBasin":
         sheets = {
             cls.rK_A: IceSheet.wais,
             cls.rA_Ap: IceSheet.wais,

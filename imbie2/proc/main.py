@@ -39,34 +39,35 @@ def main():
         fullname = user.forename + " " + user.lastname
 
         for series in user.rate_data():
-            if series is None: continue
-            rate_mgr.add_series(series)
-            names.add(series.user)
+            if series is None:
+                continue
 
+            rate_mgr.add_series(series)
+
+            names.add(series.user)
             fullnames.add(fullname)
 
         for series in user.mass_data():
-            if series is None: continue
-            mass_mgr.add_series(series)
-            names.add(series.user)
+            if series is None:
+                continue
 
+            mass_mgr.add_series(series)
+
+            names.add(series.user)
             fullnames.add(fullname)
 
         vals = []
         if not sheets: continue
 
-    import matplotlib as mpl
-    mpl.rcParams['font.weight'] = 'bold'
-    mpl.rcParams['font.size'] = 18
+    # import matplotlib as mpl
+    # mpl.rcParams['font.weight'] = 'bold'
+    # mpl.rcParams['font.size'] = 18
     plotter = Plotter()
     print("\n".join(fullnames))
 
-    # for sheet in IceSheet:
-    #     plotter.split_time_bars(rate_mgr, mass_mgr, sheet, list(names))
-    # main_sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris]
-    # plotter.sheets_time_bars(rate_mgr, main_sheets, list(names))
-
     # rate_mgr.merge()
+
+    # rate_col = mass_mgr.as_collection().differentiate()
     rate_col = rate_mgr.as_collection()
     process(rate_col)
     sys.exit(0)

@@ -1,11 +1,12 @@
 from abc import ABCMeta, abstractmethod
-from typing import Sequence, Iterable
+from typing import Sequence, Iterable, Union
 
-from imbie2.model.series.data_series import DataSeries
+from imbie2.model.series import *
+Series = Union[MassChangeDataSeries, MassRateDataSeries, WorkingMassRateDataSeries]
 
 class Collection(metaclass=ABCMeta):
 
-    def __init__(self, *series: Sequence[DataSeries]):
+    def __init__(self, *series: Sequence[Series]):
         self.series = list(series)
 
     def min_time(self) -> float:
@@ -46,7 +47,7 @@ class Collection(metaclass=ABCMeta):
                 end_t = t
         return end_t
 
-    def add_series(self, series: DataSeries) -> None:
+    def add_series(self, series: Series) -> None:
         self.series.append(series)
 
     def merge(self) -> None:
@@ -92,31 +93,31 @@ class Collection(metaclass=ABCMeta):
 
         return out
 
-    def first(self) -> DataSeries:
+    def first(self) -> Series:
         return self.series[0]
 
     @abstractmethod
-    def average(self, mode=None) -> DataSeries:
+    def average(self, mode=None) -> Series:
         """
         average data of series in collection
         """
         return None
 
     @abstractmethod
-    def sum(self) -> DataSeries:
+    def sum(self) -> Series:
         """
         sum data of series in collection
         """
         return None
 
-    def __iter__(self) -> Iterable[DataSeries]:
+    def __iter__(self) -> Iterable[Series]:
         return iter(self.series)
 
-    def __getitem__(self, index) -> DataSeries:
+    def __getitem__(self, index) -> Series:
         return self.series[index]
 
     def __len__(self) -> int:
         return len(self.series)
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.series)

@@ -1,8 +1,10 @@
 from .collection import Collection
-from imbie2.model.series import WorkingMassRateDataSeries
+from imbie2.model.series import WorkingMassRateDataSeries, MassRateDataSeries
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.util.sum_series import sum_series
 import imbie2.model as model
+
+from typing import Iterator
 
 
 class MassRateCollection(Collection):
@@ -11,6 +13,9 @@ class MassRateCollection(Collection):
 
     def sum(self):
         raise NotImplementedError("method not available for raw dm/dt data (chunk this collection first)")
+
+    def __iter__(self) -> Iterator[MassRateDataSeries]:
+        return super().__iter__()
 
     def chunk_series(self) -> "WorkingMassRateCollection":
         out = WorkingMassRateCollection()
@@ -26,7 +31,14 @@ class MassRateCollection(Collection):
 
         return out
 
+    def filter(self, **kwargs) -> "MassRateCollection":
+        return super().filter(**kwargs)
+
+
 class WorkingMassRateCollection(Collection):
+    def __iter__(self) -> Iterator[WorkingMassRateDataSeries]:
+        return super().__iter__()
+
     def average(self, mode=None) -> WorkingMassRateDataSeries:
         if not self.series:
             return None
@@ -105,3 +117,6 @@ class WorkingMassRateCollection(Collection):
             out.add_series(series.integrate(offset=offset))
 
         return out
+
+    def filter(self, **kwargs) -> "WorkingMassRateCollection":
+        return super().filter(**kwargs)

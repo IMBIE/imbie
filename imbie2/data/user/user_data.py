@@ -1,5 +1,4 @@
 #! /usr/bin/python3
-from imbie2.model.managers import MassChangeCollectionsManager, MassRateCollectionsManager
 from imbie2.data.csv import MassChangeParser, MassRateParser, IOMRatesParser
 from imbie2.model.series import MassChangeDataSeries, MassRateDataSeries
 
@@ -85,7 +84,7 @@ class UserData:
         else:
             parser = MassRateParser
 
-        with parser(path, self.group) as f:
+        with parser(path, self.group, user_name=self.lastname) as f:
             if f is not None:
                 yield from f
 
@@ -93,21 +92,21 @@ class UserData:
         info = self.mass_file
         path = os.path.join(self.folder, info['name'])
 
-        with MassChangeParser(path, self.group) as f:
+        with MassChangeParser(path, self.group, user_name=self.lastname) as f:
             if f is not None:
                 yield from f
 
-    def rate_data(self):
+    def rate_data(self, convert=False):
         if self.has_rate_data:
             yield from self._rate_series()
-        elif self.has_mass_data:
+        elif self.has_mass_data and convert:
             for series in self._mass_series():
                 yield MassRateDataSeries.derive_rates(series)
 
-    def mass_data(self):
+    def mass_data(self, convert=False):
         if self.has_mass_data:
             yield from self._mass_series()
-        elif self.has_rate_data:
+        elif self.has_rate_data and convert:
             for series in self._rate_series():
                 yield MassChangeDataSeries.accumulate_mass(series)
 

@@ -1,18 +1,17 @@
 from .sheets import IceSheet
-from .groups import BasinGroup
 import enum
 
 
 class ZwallyBasin(enum.Enum):
     @classmethod
-    def parse(cls, value):
+    def parse(cls, value: str) -> "ZwallyBasin":
         value = value.split(':')[-1].strip()
         if len(value) < 2:
             value = '0' + value
         return cls(value)
 
     @classmethod
-    def sheet(cls, sheet):
+    def sheet(cls, sheet: IceSheet) -> "ZwallyBasin":
         sheets = {
             cls.z01: IceSheet.eais,
             cls.z02: IceSheet.wais,

@@ -26,12 +26,13 @@ class FileParser(metaclass=ABCMeta):
     ...     basins[data_series.basin_id] = data_series
     """
 
-    def __init__(self, filename, user_group, logger=None):
+    def __init__(self, filename, user_group, logger=None, user_name=None):
         self.filename = filename
         self._file = None
         self._csv = None
         self._data = None
         self.user_group = user_group
+        self.user_name = user_name
 
         if logger is None:
             self.logger = logging.getLogger()
@@ -233,6 +234,9 @@ class MassChangeParser(FileParser):
                 col = collections[(basin_id, basin_grp)]
             else:
                 # create a new collection for this basin
+                if self.user_name is not None:
+                    name = self.user_name
+
                 col = self.WorkingCollection(
                     name, self.user_group, data_group,
                     basin_grp, basin_id, basin_area
@@ -349,6 +353,8 @@ class MassRateParser(FileParser):
             if (basin_id, basin_grp) in collections:
                 col = collections[(basin_id, basin_grp)]
             else:
+                if self.user_name is not None:
+                    name = self.user_name
                 # create a new collection for this basin
                 col = self.WorkingCollection(
                     name, self.user_group, data_group, basin_grp, basin_id,

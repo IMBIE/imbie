@@ -7,7 +7,7 @@ from imbie2.model.collections.collection import Collection
 
 class CollectionsManager:
 
-    def __init__(self, min_time=None, max_time=None):
+    def __init__(self, min_time: float=None, max_time: float=None):
         self.collections = OrderedDict()
         self.min_t = min_time
         self.max_t = max_time
@@ -26,11 +26,11 @@ class CollectionsManager:
             c.merge()
 
     @abstractmethod
-    def as_collection(self):
+    def as_collection(self) -> Collection:
         return None
 
     @abstractmethod
-    def new_collection(self, series):
+    def new_collection(self, series: Collection):
         return None
 
     def __iter__(self) -> Iterable[Collection]:
