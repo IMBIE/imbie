@@ -5,8 +5,7 @@ from imbie2.conf import ImbieConfig
 
 import logging
 import os
-# from .process import process
-from .process_mass import process
+from .process import process
 
 
 def main():
