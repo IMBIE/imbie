@@ -9,24 +9,30 @@ from .process import process
 
 
 def main():
+    """
+    main IMBIE2 process
+    """
+    # read the config file
     config = ImbieConfig("config")
     config.open()
 
+    # set logging label (todo: add this to config?)
     logging.basicConfig(level=logging.CRITICAL)
 
-    rate_mgr = MassRateCollectionsManager(config.start_date, config.stop_date) # 2003., 2012.
+    # create empty dM/dt and dM managers
+    rate_mgr = MassRateCollectionsManager(config.start_date, config.stop_date)
     mass_mgr = MassChangeCollectionsManager(config.start_date, config.stop_date)
 
+    # expand input directory
     root = os.path.expanduser(config.input_path)
 
+    # create sets for usernames & full names
     names = set()
     fullnames = set()
 
+    # search input directory
     for user in UserData.find(root):
-        if user.name in config.users_skip: #
-            # BDVGI: no end times
-            # mtalpe: huge values
-            # vhelm: duplicate times
+        if user.name in config.users_skip:
             continue
         fullname = user.forename + " " + user.lastname
 
@@ -48,11 +54,12 @@ def main():
             names.add(series.user)
             fullnames.add(fullname)
 
-        vals = []
-        if not sheets: continue
-
+        if not sheets:
+            continue
 
     # rate_col = mass_mgr.as_collection().differentiate() + rate_mgr.as_collection().chunk_series()
+
+    # convert manager to collection
     rate_col = rate_mgr.as_collection()
-    process(mass_mgr.as_collection())
-    # process(rate_col, config)
+    # process the data
+    process(rate_col, config)

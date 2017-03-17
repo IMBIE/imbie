@@ -1,7 +1,6 @@
 from .collection import Collection
 from imbie2.model.series import MassChangeDataSeries
 from imbie2.util.combine import weighted_combine as ts_combine
-from imbie2.util.merge_dm import merge_dM
 from imbie2.util.sum_series import sum_series
 import imbie2.model as model
 from imbie2.const.error_methods import ErrorMethod
