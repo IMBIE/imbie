@@ -13,7 +13,8 @@ class DataSeries(metaclass=ABCMeta):
         return self._get_max_time()
 
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
-                 basin_group: BasinGroup, basin_id: Basin, basin_area: float, computed: bool=False, merged: bool=False):
+                 basin_group: BasinGroup, basin_id: Basin, basin_area: float, computed: bool=False, merged: bool=False,
+                 aggregated: bool=False):
         self.user = user
         self.user_group = user_group
         self.data_group = data_group
@@ -23,6 +24,7 @@ class DataSeries(metaclass=ABCMeta):
 
         self.computed = computed
         self.merged = merged
+        self.aggregated = aggregated
 
     def limit_times(self, min_t: float=None, max_t: float=None) -> None:
         if min_t is not None:

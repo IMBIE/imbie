@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Sequence, Iterable, Union
 
 from imbie2.model.series import *
+from imbie2.const.error_methods import ErrorMethod
 Series = Union[MassChangeDataSeries, MassRateDataSeries, WorkingMassRateDataSeries]
 
 class Collection(metaclass=ABCMeta):
@@ -75,13 +76,17 @@ class Collection(metaclass=ABCMeta):
 
     def filter(self, **kwargs) -> "Collection":
         out = self.__class__()
+        if "_max" in kwargs:
+            _max = kwargs.pop("_max")
+        else: _max = None
+
         for series in self:
             valid = True
             for key, expected in kwargs.items():
                 val = getattr(series, key)
 
                 if isinstance(expected, Sequence):
-                    if val not in expected:
+                    if val is None or val not in expected:
                         valid = False
                         break
                 elif val != expected:
@@ -89,7 +94,9 @@ class Collection(metaclass=ABCMeta):
                     break
 
             if valid:
-               out.add_series(series)
+                out.add_series(series)
+                if _max is not None and len(out) >= _max:
+                    break
 
         return out
 
@@ -104,7 +111,7 @@ class Collection(metaclass=ABCMeta):
         return None
 
     @abstractmethod
-    def sum(self) -> Series:
+    def sum(self, error_method: ErrorMethod=ErrorMethod.sum) -> Series:
         """
         sum data of series in collection
         """

@@ -1,14 +1,19 @@
-from imbie2.const.basins import IceSheet
+from imbie2.const.basins import IceSheet, BasinGroup, ZwallyBasin, RignotBasin
+from imbie2.const.error_methods import ErrorMethod
 from imbie2.model.collections import WorkingMassRateCollection, MassChangeCollection, MassRateCollection
 from imbie2.plot.plotter import Plotter
-from imbie2.plot.table import MeanErrorsTable, TimeCoverageTable
+from imbie2.plot.table import MeanErrorsTable, TimeCoverageTable, BasinsTable
+from imbie2.conf import ImbieConfig
 
 from collections import OrderedDict
 
 
-def process(input_data: MassRateCollection):
+def process(input_data: MassRateCollection, config: ImbieConfig):
 
-    groups = "RA", "GMB", "IOM"
+    groups = ["RA", "GMB", "IOM"]
+    for g in config.methods_skip:
+        groups.remove(g)
+
     sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris]
     regions = OrderedDict([
         (IceSheet.eais, [IceSheet.eais]),
@@ -18,11 +23,36 @@ def process(input_data: MassRateCollection):
         (IceSheet.gris, [IceSheet.gris]),
         (IceSheet.all, [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris])
     ])
-    offset = 2003.
+    offset = config.align_date
 
     rate_data = input_data.chunk_series()
 
+    # find users who have provided a full ice sheet of basin data, but no ice sheet series.
+    # todo: this should probably be moved to a method of Collection, or similar.
+    users = list({s.user for s in rate_data})
+    for user in users:
+        user_data = rate_data.filter(user=user)
+        for group, basin_set in zip([BasinGroup.zwally, BasinGroup.rignot], [ZwallyBasin, RignotBasin]):
+            for sheet in sheets:
+                basins = list(basin_set.sheet(sheet))
+                sheet_data = user_data.filter(basin_id=basins)
+
+                if user_data.filter(basin_id=sheet, basin_group=group):
+                    continue
+
+                if len(sheet_data) == len(basins):
+                    print(user, sheet.name, group.name)
+                    series = sheet_data.sum(error_method=ErrorMethod.rss)
+
+                    series.basin_id = sheet
+                    series.basin_group = group
+                    series.user = user
+                    series.aggregated = True
+
+                    rate_data.add_series(series)
+
     rate_data.merge()
+
     mass_data = rate_data.integrate(offset=offset)
 
     groups_sheets_rate = WorkingMassRateCollection()
@@ -90,24 +120,38 @@ def process(input_data: MassRateCollection):
 
     # print tables
 
-    met = MeanErrorsTable(rate_data)
+    met = MeanErrorsTable(rate_data, msword=True)
+    # f.write(met.get_html_string())
     print(met)
 
+    btz = BasinsTable(rate_data, BasinGroup.zwally, msword=True)
+    # f.write(btz.get_html_string())
+    print(btz)
+
+    btr = BasinsTable(rate_data, BasinGroup.rignot, msword=True)
+    # f.write(btr.get_html_string())
+    print(btr)
+
     for group in groups:
-        tct = TimeCoverageTable(rate_data.filter(user_group=group))
+        tct = TimeCoverageTable(rate_data.filter(user_group=group), msword=True)
+        # f.write(tct.get_html_string())
         print(tct)
 
     # draw plots
-    plotter = Plotter()
+    plotter = Plotter(
+        filetype=config.plot_format,
+        path=config.output_path,
+        limits=True
+    )
     # intracomparisons
     for group in groups:
         plotter.group_rate_intracomparison(
             groups_regions_rate.filter(user_group=group),
-            rate_data.filter(user_group=group), regions
+            rate_data.filter(user_group=group), regions, suffix=group
         )
         plotter.group_mass_intracomparison(
             groups_regions_mass.filter(user_group=group),
-            mass_data.filter(user_group=group), regions
+            mass_data.filter(user_group=group), regions, suffix=group
         )
     # intercomparisons
     plotter.groups_rate_intercomparison(
@@ -126,95 +170,3 @@ def process(input_data: MassRateCollection):
     plotter.regions_mass_intercomparison(
         regions_mass, *all_regions
     )
-
-# class Plotter:
-#     def __init__(self):
-#
-#     def group_rate_intracomparison(self, group_avgs: WorkingMassRateCollection,
-#                                    group_contribs: WorkingMassRateCollection, **regions):
-#
-#         for i, name, sheets in enumerate(regions.items()):
-#             avg = group_avgs.filter(basin_id=name).average()
-#             pcol = style.colours.primary[avg.user_group]
-#             scol = style.colours.secondary[avg.user_group]
-#
-#             self.ax.plot(avg.t, avg.dmdt, color=pcol)
-#             self.ax.fill_between(
-#                 avg.t, avg.dmdt-avg.errs, avg.dmdt+avg.errs,
-#                 color=scol, alpha=.5
-#             )
-#
-#             if len(sheets) > 1:
-#                 continue
-#
-#             for contrib in group_contribs.filter(basin_id=sheets):
-#                 self.ax.plot(contrib.t, contrib.dmdt, color=pcol, ls='--')
-#
-#     def group_mass_intracomparison(self, group_avgs: MassChangeCollection, group_contribs: MassChangeCollection,
-#                                    **regions):
-#         for i, name, sheets in enumerate(regions.items()):
-#             avg = group_avgs.filter(basin_id=name).average()
-#             pcol = style.colours.primary[avg.user_group]
-#             scol = style.colours.secondary[avg.user_group]
-#
-#             self.ax.plot(avg.t, avg.dm, color=pcol)
-#             self.ax.fill_between(
-#                 avg.t, avg.dm-avg.errs, avg.dm+avg.errs,
-#                 color=scol, alpha=.5
-#             )
-#
-#             if len(sheets) > 1:
-#                 continue
-#
-#             for contrib in group_contribs.filter(basin_id=sheets):
-#                 self.ax.plot(contrib.t, contrib.dm, color=pcol, ls='--')
-#
-#
-#     def groups_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, group_avgs: WorkingMassRateCollection,
-#                                     **regions):
-#
-#         for i, name, sheets in enumerate(regions.items()):
-#             x_avg = region_avgs.filter(basin_id=name).average()
-#             pcol = style.colours.primary["all"]
-#             scol = style.colours.secondary["all"]
-#
-#             self.ax.plot(x_avg.t, x_avg.dmdt, color=pcol)
-#             self.ax.fill_between(
-#                 x_avg.t, x_avg.dmdt-x_avg.errs, x_avg.dmdt+x_avg.errs,
-#                 color=scol, alpha=.5
-#             )
-#
-#             for g_avg in group_avgs.filter(basin_id=name):
-#                 pcol = style.colours.primary[g_avg.user_group]
-#                 scol = style.colours.secondary[g_avg.user_group]
-#
-#                 self.ax.plot(g_avg.t, g_avg.dmdt, color=pcol)
-#                 self.ax.fill_between(
-#                     g_avg.t, g_avg.dmdt-g_avg.errs, g_avg.dmdt+g_avg.errs,
-#                     color=scol, alpha=.5
-#                 )
-#
-#     def groups_mass_intercomparison(self, region_avgs: MassChangeCollection, group_avgs: MassChangeCollection, **regions):
-#         for i, name, sheets in enumerate(regions.items()):
-#             x_avg = region_avgs.filter(basin_id=name).average()
-#             pcol = style.colours.primary["all"]
-#             scol = style.colours.secondary["all"]
-#
-#             self.ax.plot(x_avg.t, x_avg.dm, color=pcol)
-#             self.ax.fill_between(
-#                 x_avg.t, x_avg.dm-x_avg.errs, x_avg.dm+x_avg.errs,
-#                 color=scol, alpha=.5
-#             )
-#
-#             for g_avg in group_avgs.filter(basin_id=name):
-#                 pcol = style.colours.primary[g_avg.user_group]
-#                 scol = style.colours.secondary[g_avg.user_group]
-#
-#                 self.ax.plot(g_avg.t, g_avg.dm, color=pcol)
-#                 self.ax.fill_between(
-#                     g_avg.t, g_avg.dm-g_avg.errs, g_avg.dm+g_avg.errs,
-#                     color=scol, alpha=.5
-#                 )
-#
-#     def regions_mass_intercomparison(self, region_avgs: MassChangeCollection, **region):
-#         pass

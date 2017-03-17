@@ -22,10 +22,10 @@ class MassChangeDataSeries(DataSeries):
 
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
-                 mass: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False):
+                 mass: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged
+            computed, merged, aggregated
         )
         self.t, self.mass = ts2m(time, mass)
         # _, self.a = ts2m(time, area)
@@ -77,7 +77,8 @@ class MassChangeDataSeries(DataSeries):
 
         return cls(
             rate_data.user, rate_data.user_group, rate_data.data_group, rate_data.basin_group,
-            rate_data.basin_id, rate_data.basin_area, t, rate_data.a, dM, err, computed=True
+            rate_data.basin_id, rate_data.basin_area, t, rate_data.a, dM, err, computed=True,
+            aggregated=rate_data.aggregated
         )
 
     def differentiate(self) -> "model.series.MassRateDataSeries":
@@ -103,8 +104,9 @@ class MassChangeDataSeries(DataSeries):
         ar = (a.a[ia] + b.a[ib]) / 2.
 
         comp = a.computed or b.computed
+        aggr = a.aggregated or b.aggregated
 
         return cls(
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
-            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True
+            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=True
         )

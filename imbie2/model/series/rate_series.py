@@ -24,10 +24,11 @@ class MassRateDataSeries(DataSeries):
 
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, t_start: np.ndarray, t_end: np.ndarray,
-                 area: np.ndarray, rate: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False):
+                 area: np.ndarray, rate: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False,
+                 aggregated: bool=False):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged
+            computed, merged, aggregated
         )
         self.t0 = t_start
         self.t1 = t_end
@@ -80,12 +81,15 @@ class MassRateDataSeries(DataSeries):
         t0 = mass_data.t[:-1]
         t1 = mass_data.t[1:]
         dmdt = np.diff(mass_data.mass)
-        area = (mass_data.a[:-1] + mass_data.a[1:]) / 2.
+        if mass_data.a is not None:
+            area = (mass_data.a[:-1] + mass_data.a[1:]) / 2.
+        else:
+            area = None
 
         return cls(
             mass_data.user, mass_data.user_group, mass_data.data_group, mass_data.basin_group,
             mass_data.basin_id, mass_data.basin_area, t0, t1, area, dmdt, mass_data.errs,
-            computed=True
+            computed=True, aggregated=mass_data.aggregated
         )
 
     def __len__(self) -> int:
@@ -118,10 +122,11 @@ class MassRateDataSeries(DataSeries):
         ar = (a.a[ia] + b.a[ib]) / 2.
 
         comp = a.computed or b.computed
+        aggr = a.aggregated or b.aggregated
 
         return cls(
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
-            a.basin_id, a.basin_area, t0, t1, ar, m, e, comp, merged=True
+            a.basin_id, a.basin_area, t0, t1, ar, m, e, comp, merged=True, aggregated=aggr
         )
 
     def chunk_rates(self) -> "WorkingMassRateDataSeries":
@@ -149,7 +154,7 @@ class MassRateDataSeries(DataSeries):
 
         return WorkingMassRateDataSeries(
             self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
-            t, self.a, dmdt, errs
+            t, self.a, dmdt, errs, aggregated=self.aggregated
         )
 
     def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
@@ -159,10 +164,10 @@ class MassRateDataSeries(DataSeries):
 class WorkingMassRateDataSeries(DataSeries):
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
-                 dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False):
+                 dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged
+            computed, merged, aggregated
         )
         self.t = time
         self.a = area
@@ -238,11 +243,15 @@ class WorkingMassRateDataSeries(DataSeries):
         ar = None
 
         comp = a.computed or b.computed
+        aggr = a.aggregated or b.aggregated
 
         return cls(
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
-            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True
+            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=aggr
         )
 
     def __len__(self) -> int:
         return len(self.t)
+
+    def chunk_rates(self):
+        return self

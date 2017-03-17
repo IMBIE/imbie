@@ -116,6 +116,7 @@ class Plotter:
     _dmdt1 = 300
     _dm0 = -7000
     _dm1 = 2000
+    _set_limits = False
 
     _sheet_names = {
         IceSheet.wais: "West Antarctica",
@@ -132,11 +133,14 @@ class Plotter:
         "all": "All"
     }
 
-    def __init__(self, filetype=None, path=None):
+    def __init__(self, filetype=None, path=None, limits: bool=None):
         self._ext = filetype
         if path is None:
             path = os.getcwd()
         self._path = os.path.expanduser(path)
+
+        if limits is not None:
+            self._set_limits = limits
 
     def draw_plot(self, fname=None):
         if fname is None:
@@ -975,7 +979,7 @@ class Plotter:
         return "continent_"+suffix+lims+sheets, {"frameon": False, "loc": 3}
 
     @render_plot_with_legend
-    def sheet_scatter(self, ice_sheet, basins, data):
+    def sheet_scatter(self, ice_sheet: IceSheet, basins: BasinGroup, data: WorkingMassRateCollection):
         markers = cycle(style.markers)
         groups = set()
         legend_style = {
@@ -984,9 +988,11 @@ class Plotter:
         }
 
         for marker, basin in zip(markers, basins.sheet(ice_sheet)):
-            if basin not in data: continue
+            basin_data = data.filter(basin_id=basin)
 
-            basin_data = data[basin]
+            if not basin_data:
+                continue
+
             _new = plots.basin_scatter(self.ax, basin_data, marker)
             groups.update(_new)
 
@@ -1017,7 +1023,7 @@ class Plotter:
 
     @render_plot
     def group_rate_intracomparison(self, group_avgs: WorkingMassRateCollection,
-                                   group_contribs: WorkingMassRateCollection, regions):
+                                   group_contribs: WorkingMassRateCollection, regions, suffix: str=None):
         for i, (name, sheets) in enumerate(regions.items()):
             self.ax = plt.subplot(230+i+1)
 
@@ -1050,15 +1056,23 @@ class Plotter:
             self.ax.set_ylabel("Mass Balance (Gt/yr)")
             self.ax.set_title(self._sheet_names[name])
             # set x- & y-axis limits
-            self.ax.set_ylim(self._dmdt0, self._dmdt1)
-            self.ax.set_xlim(self._time0, self._time1)
+            if self._set_limits:
+                self.ax.set_ylim(self._dmdt0, self._dmdt1)
+                self.ax.set_xlim(self._time0, self._time1)
+
+            self.ax.get_yaxis().set_visible(False)
+            self.ax.get_xaxis().set_visible(False)
 
         self.fig.suptitle("dM/dt intracomparison")
-        return "group_rate_intracomparison"
+
+        name = "group_rate_intracomparison"
+        if suffix is not None:
+            name += "_" + suffix
+        return name
 
     @render_plot
     def group_mass_intracomparison(self, group_avgs: MassChangeCollection, group_contribs: MassChangeCollection,
-                                   regions):
+                                   regions, suffix: str=None):
         for i, (name, sheets) in enumerate(regions.items()):
             self.ax = plt.subplot(230+i+1)
 
@@ -1091,11 +1105,19 @@ class Plotter:
             self.ax.set_ylabel("Mass Change (Gt)")
             self.ax.set_title(self._sheet_names[name])
             # set x- & y-axis limits
-            self.ax.set_ylim(self._dm0, self._dm1)
-            self.ax.set_xlim(self._time0, self._time1)
+            if self._set_limits:
+                self.ax.set_ylim(self._dm0, self._dm1)
+                self.ax.set_xlim(self._time0, self._time1)
+
+            self.ax.get_yaxis().set_visible(False)
+            self.ax.get_xaxis().set_visible(False)
 
         self.fig.suptitle("dM intracomparison")
-        return "group_mass_intracomparison"
+
+        name = "group_mass_intracomparison"
+        if suffix is not None:
+            name += "_" + suffix
+        return name
 
     @render_plot
     def groups_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, group_avgs: WorkingMassRateCollection,
@@ -1139,8 +1161,12 @@ class Plotter:
             self.ax.set_ylabel("Mass Balance (Gt/yr)")
             self.ax.set_title(self._sheet_names[name])
             # set x- & y-axis limits
-            self.ax.set_ylim(self._dmdt0, self._dmdt1)
-            self.ax.set_xlim(self._time0, self._time1)
+            if self._set_limits:
+                self.ax.set_ylim(self._dmdt0, self._dmdt1)
+                self.ax.set_xlim(self._time0, self._time1)
+
+            self.ax.get_yaxis().set_visible(False)
+            self.ax.get_xaxis().set_visible(False)
 
         self.fig.suptitle("dM/dt intercomparison")
         return "groups_rate_intercomparison"
@@ -1183,11 +1209,15 @@ class Plotter:
             self.ax.axvline(com_t_max, ls='--', color='k')
 
             # set title & axis labels
-            self.ax.set_ylabel("Mass Change (Gt)")
+            # self.ax.set_ylabel("Mass Change (Gt)")
             self.ax.set_title(self._sheet_names[name])
             # set x- & y-axis limits
-            self.ax.set_ylim(self._dm0, self._dm1)
-            self.ax.set_xlim(self._time0, self._time1)
+            if self._set_limits:
+                self.ax.set_ylim(self._dm0, self._dm1)
+                self.ax.set_xlim(self._time0, self._time1)
+
+            self.ax.get_yaxis().set_visible(False)
+            self.ax.get_xaxis().set_visible(False)
 
         self.fig.suptitle("dM intercomparison")
         return "groups_mass_intercomparison"
@@ -1223,7 +1253,11 @@ class Plotter:
         self.ax.set_ylabel("Mass Change (Gt)")
         self.ax.set_title("Intercomparison of Regions")
         # set x- & y-axis limits
-        self.ax.set_ylim(self._dm0, self._dm1)
-        self.ax.set_xlim(self._time0, self._time1)
+        if self._set_limits:
+            self.ax.set_ylim(self._dm0, self._dm1)
+            self.ax.set_xlim(self._time0, self._time1)
+
+        self.ax.get_yaxis().set_visible(False)
+        self.ax.get_xaxis().set_visible(False)
 
         return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}

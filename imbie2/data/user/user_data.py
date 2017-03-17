@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 from imbie2.data.csv import MassChangeParser, MassRateParser, IOMRatesParser
 from imbie2.model.series import MassChangeDataSeries, MassRateDataSeries
+from imbie2.model.collections import MassRateCollection, MassChangeCollection
 
 import json
 import os
@@ -109,6 +110,12 @@ class UserData:
         elif self.has_rate_data and convert:
             for series in self._rate_series():
                 yield MassChangeDataSeries.accumulate_mass(series)
+
+    def rate_collection(self):
+        return MassRateCollection(*self.rate_data())
+
+    def mass_collection(self):
+        return MassChangeCollection(*self.mass_data())
 
     @classmethod
     def find(cls, root=None):
