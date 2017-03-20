@@ -71,7 +71,7 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         for sheet in sheets:
             new_series = rate_data.filter(
                 user_group=group, basin_id=sheet
-            ).average()
+            ).average(mode=config.combine_method)
             if new_series is None:
                 continue
 
@@ -94,7 +94,9 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
             groups_regions_mass.add_series(region_mass)
 
     for sheet in sheets:
-        sheet_rate_avg = groups_sheets_rate.filter(basin_id=sheet).average()
+        sheet_rate_avg = groups_sheets_rate.filter(
+            basin_id=sheet
+        ).average(mode=config.combine_method)
         if sheet_rate_avg is None:
             continue
 
@@ -143,23 +145,34 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         path=config.output_path,
         limits=True
     )
+    plotter.sheets_error_bars(
+        groups_regions_rate, regions_rate, groups, regions
+    )
     # intracomparisons
     for group in groups:
+        plotter.group_rate_boxes(
+            rate_data.filter(user_group=group), {s: s for s in sheets}, suffix=group
+        )
         plotter.group_rate_intracomparison(
             groups_regions_rate.filter(user_group=group),
-            rate_data.filter(user_group=group), regions, suffix=group
+            rate_data.filter(user_group=group), regions, suffix=group,
+            mark=["Zwally", "Sandberg Sorensen", "Rietbroek"]
         )
         plotter.group_mass_intracomparison(
             groups_regions_mass.filter(user_group=group),
-            mass_data.filter(user_group=group), regions, suffix=group
+            mass_data.filter(user_group=group), regions, suffix=group,
+            mark=["Zwally", "Sandberg Sorensen", "Rietbroek"]
         )
     # intercomparisons
-    plotter.groups_rate_intercomparison(
-        regions_rate, groups_regions_rate, regions
-    )
-    plotter.groups_mass_intercomparison(
-        regions_mass, groups_regions_mass, regions
-    )
+    for _id, region in regions.items():
+        reg = {_id: region}
+
+        plotter.groups_rate_intercomparison(
+            regions_rate, groups_regions_rate, reg
+        )
+        plotter.groups_mass_intercomparison(
+            regions_mass, groups_regions_mass, reg
+        )
     # region comparisons
     ais_regions = [IceSheet.eais, IceSheet.wais, IceSheet.apis]
     all_regions = [IceSheet.ais, IceSheet.gris, IceSheet.all]

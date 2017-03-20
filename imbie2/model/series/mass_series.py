@@ -22,10 +22,11 @@ class MassChangeDataSeries(DataSeries):
 
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
-                 mass: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False):
+                 mass: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False,
+                 contributions: int=1):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged, aggregated
+            computed, merged, aggregated, contributions
         )
         self.t, self.mass = ts2m(time, mass)
         # _, self.a = ts2m(time, area)

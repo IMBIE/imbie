@@ -5,7 +5,7 @@ import matplotlib as mpl
 import numpy as np
 import math
 import os
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from . import plots
 from . import style
@@ -142,12 +142,37 @@ class Plotter:
         if limits is not None:
             self._set_limits = limits
 
+    def _get_subplot_shape(self, count: int) -> Tuple[int, int, int]:
+        if count == 1:
+            w = 1
+            h = 1
+        elif count == 2:
+            w = 2
+            h = 1
+        elif count == 3:
+            w = 3
+            h = 1
+        elif count == 4:
+            w = 2
+            h = 2
+        elif count <= 6:
+            w = 3
+            h = 2
+        else:
+            raise ValueError("unsupported number of subplots: {}".format(count))
+
+        code = h * 100 + w * 10
+        return w, h, code
+
     def draw_plot(self, fname=None):
         if fname is None:
             return # self.clear_plot()
         elif self._ext is None:
             plt.show()
         else:
+            if not os.path.exists(self._path):
+                print("creating directory: {}".format(self._path))
+                os.makedirs(self._path)
             fname = fname+'.'+self._ext
             fpath = os.path.join(self._path, fname)
             plt.savefig(fpath, dpi=192)
@@ -580,82 +605,20 @@ class Plotter:
         return "errors_" + name.lower(), {"frameon": False, "loc": 4}
 
     @render_plot_with_legend
-    def sheets_error_bars(self, data, t_min=None, t_max=None):
+    def sheets_error_bars(self, group_avgs: WorkingMassRateCollection, sheet_avgs: WorkingMassRateCollection,
+                          methods: Sequence[str], sheets: Sequence[IceSheet]):
         # get mean & error dM/dt per ice-sheet and group
-        max_methods = 0
-        sorted_mean = OrderedDict()
-        sorted_errs = OrderedDict()
-        all_methods = []
-
-        for sheet in IceSheet:
-            if sheet == IceSheet.ais: continue
-            methods = {}
-
-            _any = False
-            for series in data[sheet]:
-                # if (t_min is not None and series.min_time > t_min) or\
-                #    (t_max is not None and series.max_time < t_max):
-                #     continue
-                _any = True
-                meth = series.user_group
-                if meth not in all_methods:
-                    all_methods.append(meth)
-
-                if meth not in methods:
-                    methods[meth] = []
-                methods[meth].append(series)
-
-            if not _any: continue
-
-            if len(methods) > max_methods:
-                max_methods = len(methods)
-
-            all_means = []
-            all_sigma = []
-
-            sorted_errs[sheet] = OrderedDict()
-            sorted_mean[sheet] = OrderedDict()
-
-            for meth in methods:
-                means = [s.mean for s in methods[meth]]
-                sigma = [s.sigma for s in methods[meth]]
-
-                mean = np.mean(means)
-                errs = math.sqrt(
-                    np.mean(np.square(sigma))
-                )
-
-                sorted_mean[sheet][meth] = mean
-                sorted_errs[sheet][meth] = errs
-
-                all_means.append(mean)
-                all_sigma.append(errs)
-            # compute mean & error per ice-sheet across all groups
-            sorted_mean[sheet]['all'] = np.mean(
-                all_means
-            )
-            sorted_errs[sheet]['all'] = math.sqrt(
-                np.mean(np.square(all_sigma))
-            )
-        sorted_mean[IceSheet.ais] = OrderedDict()
-        sorted_errs[IceSheet.ais] = OrderedDict()
-        for g in 'IOM', 'GMB', 'RA', 'all':
-            others = IceSheet.apis, IceSheet.wais, IceSheet.eais
-            sorted_mean[IceSheet.ais][g] = sum(sorted_mean[o][g] for o in others)
-            sorted_errs[IceSheet.ais][g] = sum(sorted_errs[o][g] for o in others)
-
-        width = len(all_methods)
+        width = len(methods)
         min_y = None
         max_y = None
         max_x = 0
 
-        for i, sheet in enumerate(IceSheet):
-            if sheet not in sorted_mean: continue
-
+        for i, sheet in enumerate(sheets):
             max_x += width+1
             # plot all-group patches
-            mean = sorted_mean[sheet]['all']
-            err = sorted_errs[sheet]['all']
+            sheet_series = sheet_avgs.filter(basin_id=sheet).first()
+            mean = sheet_series.mean
+            err = sheet_series.sigma
 
             y = mean - err
             x = i * (width + 1)
@@ -670,12 +633,13 @@ class Plotter:
             if max_y is None or y + err > max_y:
                 max_y = y + err
             # plot error bars
-            for j, method in enumerate(all_methods):
-                if method not in sorted_mean[sheet]:
-                    continue
+            for j, method in enumerate(methods):
+                group_series = group_avgs.filter(
+                    user_group=method, basin_id=sheet
+                ).first()
 
-                mean = sorted_mean[sheet][method]
-                err = sorted_errs[sheet][method]
+                mean = group_series.mean
+                err = group_series.sigma
 
                 jx = x + j + .5
                 y1 = mean - err
@@ -690,7 +654,7 @@ class Plotter:
                 if y1 < min_y: min_y = y1
                 if y2 > max_y: max_y = y2
         # add legend
-        for group in all_methods:
+        for group in methods:
             self.glyphs.append(
                 self.group_glyph(group)
             )
@@ -699,8 +663,8 @@ class Plotter:
             )
 
         # set axis labels, limits, ticks
-        names = [self._sheet_names[s] for s in IceSheet]
-        ticks = [(i+.5)*width+i for i, _ in enumerate(IceSheet)]
+        names = [self._sheet_names[s] for s in sheets]
+        ticks = [(i+.5)*width+i for i, _ in enumerate(sheets)]
 
         y_margin = (max_y - min_y) * .05
 
@@ -722,261 +686,62 @@ class Plotter:
         return "sheets_error_bars", {'frameon': False}
 
     @render_plot
-    def box_coverage(self, data, *groups):
-        if not groups:
-            groups = "RA", "GMB", "IOM"
+    def group_rate_boxes(self, rate_data: WorkingMassRateCollection, regions, suffix: str=None):
+        plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
 
-        for i, sheet in enumerate(IceSheet):
-            ax = plt.subplot(230 + i + 1)
+        for i, (name, sheets) in enumerate(regions.items()):
+            self.ax = plt.subplot(plt_shape+i+1)
 
-            sheet_data = data[sheet]
-            if not sheet_data:
-                return None, {}
-            plots.coverage_boxes(ax, sheet_data, groups)
+            for series in rate_data.filter(basin_id=sheets):
+                pcol = style.colours.primary[series.user_group]
 
-            ax.set_title(self._sheet_names[sheet] + "\n")
-            ax.set_ylabel("Mass Balance (Gt/yr)")
-            ax.set_ylim(self._dmdt0, self._dmdt1)
+                t_min = series.min_time
+                t_ext = series.max_time - t_min
 
-        return "box_coverage_"+'_'.join(groups)
+                r_min = series.min_rate
+                r_ext = series.max_rate - r_min
 
-    @render_plot_with_legend
-    def group_boxes(self, data, group):
+                if r_ext == 0:
+                    r_min -= series.errs[0]
+                    r_ext += series.errs[0]
 
-        pcol = style.colours.primary[group]
-        scol = style.colours.secondary[group]
-
-        for sheet in IceSheet:
-            for series in data[sheet]:
-                if series.user_group != group:
-                    continue
-
-                mean = series.mean
-                sigma = series.sigma
-
-        # TODO: finish this
-        raise NotImplemented()
-
-    @render_plot_with_legend
-    def rate_series_sheet_groups(self, data, sheet, groups=None):
-        sheet_name = sheet.value
-        title = self._sheet_names[sheet]
-        if groups is None:
-            groups = 'RA', 'GMB', 'IOM'
-        groups_rate = {g: [] for g in groups}
-        groups_errs = {g: [] for g in groups}
-        groups_time = {g: [] for g in groups}
-        groups_rate["all"] = []
-        groups_errs["all"] = []
-        groups_time["all"] = []
-        t_min = {g: None for g in groups}
-        t_max = {g: None for g in groups}
-
-        if sheet == IceSheet.ais:
-            sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
-        else: sheets = [sheet]
-
-        for sheet in sheets:
-            sheet_rate = {g: [] for g in groups}
-            sheet_errs = {g: [] for g in groups}
-            sheet_time = {g: [] for g in groups}
-
-            for series in data[sheet]:
-                g = series.user_group
-                if g not in groups:
-                    continue
-
-                t, dmdt, errs = chunk_rates(series)
-
-                sheet_time[g].append(t)
-                sheet_rate[g].append(dmdt)
-                sheet_errs[g].append(errs)
-
-                if t_min[g] is None or t_min[g] > series.min_time:
-                    t_min[g] = series.min_time
-                if t_max[g] is None or t_max[g] < series.max_time:
-                    t_max[g] = series.max_time
-
-            all_time = []
-            all_rate = []
-            all_errs = []
-            for g in groups:
-                t, rate = ts_combine(sheet_time[g], sheet_rate[g])
-                _, errs = ts_combine(sheet_time[g], sheet_errs[g], error=True)
-
-                groups_time[g].append(t)
-                groups_rate[g].append(rate)
-                groups_errs[g].append(errs)
-                all_time.append(t)
-                all_rate.append(rate)
-                all_errs.append(errs)
-
-            t, rate = ts_combine(all_time, all_rate)
-            _, errs = ts_combine(all_time, all_errs, error=True)
-
-            groups_time["all"].append(t)
-            groups_rate["all"].append(rate)
-            groups_errs["all"].append(errs)
-
-        for g in chain(groups, ["all"]):
-
-            if len(sheets) > 1:
-                t, rate = sum_sheets(groups_time[g], groups_rate[g])
-                _, errs = sum_sheets(groups_time[g], groups_errs[g])
-            else:
-                t = groups_time[g][0]
-                rate = groups_rate[g][0]
-                errs = groups_errs[g][0]
-
-            col_a = style.colours.primary[g]
-            col_b = style.colours.secondary[g]
-
-            self.ax.plot(t, rate, color=col_a)
-            self.ax.fill_between(
-                t, rate-errs, rate+errs,
-                color=col_b, alpha=0.5,
-                interpolate=True
-            )
-            # add legend values
-            self.glyphs.append(
-                self.group_glyph(g)
-            )
-            self.labels.append(
-                self._group_names[g]
-            )
-
-        com_t_min = max(t_min.values())
-        com_t_max = min(t_max.values())
-        self.ax.axvline(com_t_min, ls='--', color='k')
-        self.ax.axvline(com_t_max, ls='--', color='k')
-
-        plt.title(title)
-        plt.ylabel("Mass Balance (Gt/yr)")
-        self.ax.set_ylim(self._dmdt0, self._dmdt1)
-        self.ax.set_xlim(self._time0, self._time1)
-        return "rate_series_sheet_groups_"+sheet_name, {'frameon': False}
-
-    @render_plot_with_legend
-    def mass_series_continent_sheets(self, data, sheet_groups, names, min_t=None,
-                                     max_t=None, avg_method=AverageMethod.equal_groups):
-
-        pcols = cycle(["#531A59", "#1B8C6F", "#594508"])
-        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D"])
-
-        for name, sheet_set, pcol, scol in zip(names, sheet_groups, pcols, scols):
-            set_time = []
-            set_dmdt = []
-            set_errs = []
-
-            for sheet in sheet_set:
-                groups_time = {}
-                groups_dmdt = {}
-                groups_errs = {}
-                sheet_time = []
-                sheet_dmdt = []
-                sheet_errs = []
-
-                for series in data[sheet]:
-                    if avg_method == AverageMethod.equal_groups:
-                        g = series.user_group
-                    else:
-                        g = "all"
-                    if g not in groups_time:
-                        groups_time[g] = []
-                        groups_dmdt[g] = []
-                        groups_errs[g] = []
-
-                    t, dmdt, errs = chunk_rates(series)
-                    groups_time[g].append(t)
-                    groups_dmdt[g].append(dmdt)
-                    groups_errs[g].append(errs)
-
-                for g in groups_time:
-                    if avg_method == AverageMethod.inverse_errs:
-                        w = [1./errs for errs in groups_errs[g]]
-                        t, dmdt = ts_combine(groups_time[g], groups_dmdt[g], w)
-                        _, errs = ts_combine(groups_time[g], groups_errs[g], error=True)
-                    else:
-                        t, dmdt = ts_combine(groups_time[g], groups_dmdt[g])
-                        _, errs = ts_combine(groups_time[g], groups_errs[g], error=True)
-
-                    sheet_time.append(t)
-                    sheet_dmdt.append(dmdt)
-                    sheet_errs.append(errs)
-
-                if len(sheet_time) > 1:
-                    t, dmdt = ts_combine(sheet_time, sheet_dmdt)
-                    _, errs = ts_combine(sheet_time, sheet_errs, error=True)
+                if series.computed:
+                    rect = mpatches.Rectangle(
+                        (t_min, r_min),
+                        t_ext, r_ext,
+                        edgecolor=pcol, hatch='\\/',
+                        fill=None
+                    )
                 else:
-                    t = sheet_time[0]
-                    dmdt = sheet_dmdt[0]
-                    errs = sheet_errs[0]
+                    rect = mpatches.Rectangle(
+                        (t_min, r_min),
+                        t_ext, r_ext,
+                        facecolor=pcol, alpha=.4
+                    )
+                self.ax.add_patch(rect)
 
-                set_time.append(t)
-                set_dmdt.append(dmdt)
-                set_errs.append(errs)
+            # set title & axis labels
+            self.ax.set_ylabel("Mass Balance (Gt/yr)")
+            self.ax.set_title(self._sheet_names[name])
+            # set x- & y-axis limits
+            if self._set_limits:
+                self.ax.set_ylim(self._dmdt0, self._dmdt1)
+                self.ax.set_xlim(self._time0, self._time1)
 
-            # t, _ = ts_combine(set_time, set_dmdt)
-            #
-            # dmdt = np.zeros(t.shape, dtype=np.float64)
-            # errs = np.zeros(t.shape, dtype=np.float64)
-            #
-            # for i, times in enumerate(set_time):
-            #     i1, i2 = match(t, times)
-            #     dmdt[i1] += set_dmdt[i][i2]
-            #     errs[i1] += set_errs[i][i2]
+            show_yaxis = i % plt_w == 0
+            show_xaxis = int(i / plt_w) == plt_h - 1
 
-            t, dmdt = sum_sheets(set_time, set_dmdt)
-            _, errs = sum_sheets(set_time, set_errs)
+            self.ax.get_yaxis().set_visible(show_yaxis)
+            self.ax.get_xaxis().set_visible(show_xaxis)
 
-            ok = np.ones(t.shape, dtype=bool)
-            if min_t is not None:
-                ok = np.logical_and(
-                    ok, t > min_t
-                )
-            if max_t is not None:
-                ok = np.logical_and(
-                    ok, t < max_t
-                )
+        self.fig.suptitle("<dM/dt> Data Coverage")
+        self.fig.autofmt_xdate()
 
-            t = t[ok]
-            mass = np.cumsum(dmdt[ok]) / 12.
-            errs = np.cumsum(errs[ok]) / 12.
-
-            self.ax.plot(t, mass, color=pcol)
-            self.ax.fill_between(
-                t, mass-errs, mass+errs,
-                alpha=0.5, color=scol,
-                interpolate=True
-            )
-            # add legend values
-            self.glyphs.append(
-                self.colour_glyph(pcol)
-            )
-            self.labels.append(name)
-
-        plt.ylabel("Mass Change (Gt)")
-        avg_suffixes = {
-            AverageMethod.equal_groups: "eqg_",
-            AverageMethod.equal_series: "eqs_",
-            AverageMethod.inverse_errs: "inv_",
-            AverageMethod.split_altimetry: "qrt_"
-        }
-        suffix = avg_suffixes[avg_method]
-
-        lims = ""
-        t0, t1 = self._time0, self._time1
-        if min_t is not None:
-            lims += str(min_t) + '_'
-            t0 = min_t
-        if max_t is not None:
-            lims += str(max_t) + '_'
-            t1 = max_t
-
-        sheets = "_".join(names)
-        self.ax.set_ylim(self._dm0, self._dm1)
-        self.ax.set_xlim(t0, t1)
-        return "continent_"+suffix+lims+sheets, {"frameon": False, "loc": 3}
+        name = "group_rate_boxes"
+        name += "_".join([s.value for s in regions])
+        if suffix is not None:
+            name += "_" + suffix
+        return name
 
     @render_plot_with_legend
     def sheet_scatter(self, ice_sheet: IceSheet, basins: BasinGroup, data: WorkingMassRateCollection):
@@ -1019,13 +784,15 @@ class Plotter:
             return "scatter_"+ice_sheet.value, legend_style
         return None, {}
 
-    #### NEW PLOTTING METHODS:
-
     @render_plot
     def group_rate_intracomparison(self, group_avgs: WorkingMassRateCollection,
-                                   group_contribs: WorkingMassRateCollection, regions, suffix: str=None):
+            group_contribs: WorkingMassRateCollection, regions, suffix: str=None, mark: Sequence[str]=None) -> str:
+        plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
+        if mark is None:
+            mark = []
+
         for i, (name, sheets) in enumerate(regions.items()):
-            self.ax = plt.subplot(230+i+1)
+            self.ax = plt.subplot(plt_shape+i+1)
 
             avg = group_avgs.filter(basin_id=name).average()
             if avg is None:
@@ -1044,6 +811,14 @@ class Plotter:
             if len(sheets) == 1:
                 for contrib in group_contribs.filter(basin_id=sheets):
                     self.ax.plot(contrib.t, contrib.dmdt, color=pcol, ls='--')
+                    if contrib.user in mark:
+                        x = contrib.t[-1]
+                        y = contrib.dmdt[-1]
+                        self.ax.annotate(
+                            contrib.user,
+                            xy=(x, y), xytext=(-20, 10),
+                            textcoords='offset points', ha='left', va='bottom',
+                            arrowprops=dict(arrowstyle='->'))
 
             # get start & end time of common period
             com_t_min = group_contribs.filter(basin_id=sheets).concurrent_start()
@@ -1060,21 +835,30 @@ class Plotter:
                 self.ax.set_ylim(self._dmdt0, self._dmdt1)
                 self.ax.set_xlim(self._time0, self._time1)
 
-            self.ax.get_yaxis().set_visible(False)
-            self.ax.get_xaxis().set_visible(False)
+            show_yaxis = i % plt_w == 0
+            show_xaxis = int(i / plt_w) == plt_h - 1
+
+            self.ax.get_yaxis().set_visible(show_yaxis)
+            self.ax.get_xaxis().set_visible(show_xaxis)
 
         self.fig.suptitle("dM/dt intracomparison")
+        self.fig.autofmt_xdate()
 
-        name = "group_rate_intracomparison"
+        name = "group_rate_intracomparison_"
+        name += "_".join([s.value for s in regions])
         if suffix is not None:
             name += "_" + suffix
         return name
 
     @render_plot
     def group_mass_intracomparison(self, group_avgs: MassChangeCollection, group_contribs: MassChangeCollection,
-                                   regions, suffix: str=None):
+                                   regions, suffix: str=None, mark: Sequence[str]=None) -> str:
+        if mark is None:
+            mark = []
+        plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
+
         for i, (name, sheets) in enumerate(regions.items()):
-            self.ax = plt.subplot(230+i+1)
+            self.ax = plt.subplot(plt_shape+i+1)
 
             avg = group_avgs.filter(basin_id=name).average()
             if avg is None:
@@ -1093,6 +877,14 @@ class Plotter:
             if len(sheets) == 1:
                 for contrib in group_contribs.filter(basin_id=sheets):
                     self.ax.plot(contrib.t, contrib.mass, color=pcol, ls='--')
+                    if contrib.user in mark:
+                        x = contrib.t[-1]
+                        y = contrib.mass[-1]
+                        self.ax.annotate(
+                            contrib.user,
+                            xy=(x, y), xytext=(-20, 10),
+                            textcoords='offset points', ha='left', va='bottom',
+                            arrowprops=dict(arrowstyle='->'))
 
             # get start & end time of common period
             com_t_min = group_contribs.filter(basin_id=sheets).concurrent_start()
@@ -1109,22 +901,28 @@ class Plotter:
                 self.ax.set_ylim(self._dm0, self._dm1)
                 self.ax.set_xlim(self._time0, self._time1)
 
-            self.ax.get_yaxis().set_visible(False)
-            self.ax.get_xaxis().set_visible(False)
+            show_yaxis = i % plt_w == 0
+            show_xaxis = int(i / plt_w) == plt_h - 1
+
+            self.ax.get_yaxis().set_visible(show_yaxis)
+            self.ax.get_xaxis().set_visible(show_xaxis)
 
         self.fig.suptitle("dM intracomparison")
+        self.fig.autofmt_xdate()
 
-        name = "group_mass_intracomparison"
+        name = "group_mass_intracomparison_"
+        name += "_".join([s.value for s in regions])
         if suffix is not None:
             name += "_" + suffix
         return name
 
     @render_plot
     def groups_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, group_avgs: WorkingMassRateCollection,
-                                    regions):
+                                    regions) -> str:
+        plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
 
         for i, (name, sheets) in enumerate(regions.items()):
-            self.ax = plt.subplot(230+i+1)
+            self.ax = plt.subplot(plt_shape+i+1)
 
             x_avg = region_avgs.filter(basin_id=name).average()
             if x_avg is None:
@@ -1165,17 +963,26 @@ class Plotter:
                 self.ax.set_ylim(self._dmdt0, self._dmdt1)
                 self.ax.set_xlim(self._time0, self._time1)
 
-            self.ax.get_yaxis().set_visible(False)
-            self.ax.get_xaxis().set_visible(False)
+            show_yaxis = i % plt_w == 0
+            show_xaxis = int(i / plt_w) == plt_h - 1
+
+            self.ax.get_yaxis().set_visible(show_yaxis)
+            self.ax.get_xaxis().set_visible(show_xaxis)
 
         self.fig.suptitle("dM/dt intercomparison")
-        return "groups_rate_intercomparison"
+        self.fig.autofmt_xdate()
+
+        name = "groups_rate_intercomparison_"
+        name += "_".join([s.value for s in regions])
+        return name
 
     @render_plot
     def groups_mass_intercomparison(self, region_avgs: MassChangeCollection, group_avgs: MassChangeCollection,
-                                    regions):
+                                    regions) -> str:
+        plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
+
         for i, (name, sheets) in enumerate(regions.items()):
-            self.ax = plt.subplot(230+i+1)
+            self.ax = plt.subplot(plt_shape+i+1)
 
             x_avg = region_avgs.filter(basin_id=name).average()
             if x_avg is None:
@@ -1216,14 +1023,21 @@ class Plotter:
                 self.ax.set_ylim(self._dm0, self._dm1)
                 self.ax.set_xlim(self._time0, self._time1)
 
-            self.ax.get_yaxis().set_visible(False)
-            self.ax.get_xaxis().set_visible(False)
+            show_yaxis = i % plt_w == 0
+            show_xaxis = int(i / plt_w) == plt_h - 1
+
+            self.ax.get_yaxis().set_visible(show_yaxis)
+            self.ax.get_xaxis().set_visible(show_xaxis)
 
         self.fig.suptitle("dM intercomparison")
-        return "groups_mass_intercomparison"
+        self.fig.autofmt_xdate()
+
+        name = "groups_mass_intercomparison_"
+        name += "_".join([s.value for s in regions])
+        return name
 
     @render_plot_with_legend
-    def regions_mass_intercomparison(self, region_avgs: MassChangeCollection, *regions: Sequence[IceSheet]):
+    def regions_mass_intercomparison(self, region_avgs: MassChangeCollection, *regions: Sequence[IceSheet]) -> str:
         pcols = cycle(["#531A59", "#1B8C6F", "#594508"])
         scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D"])
 
@@ -1252,12 +1066,11 @@ class Plotter:
         # set title & axis labels
         self.ax.set_ylabel("Mass Change (Gt)")
         self.ax.set_title("Intercomparison of Regions")
+        self.fig.autofmt_xdate()
         # set x- & y-axis limits
         if self._set_limits:
             self.ax.set_ylim(self._dm0, self._dm1)
             self.ax.set_xlim(self._time0, self._time1)
-
-        self.ax.get_yaxis().set_visible(False)
-        self.ax.get_xaxis().set_visible(False)
+        self.ax.set_xticklabels(self.ax.xaxis.get_majorticklabels(), rotation=45)
 
         return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}

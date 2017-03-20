@@ -1,5 +1,6 @@
 from .collection import Collection
 from imbie2.const.error_methods import ErrorMethod
+from imbie2.const.average_methods import AverageMethod
 from imbie2.model.series import WorkingMassRateDataSeries, MassRateDataSeries
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.util.sum_series import sum_series
@@ -48,7 +49,7 @@ class WorkingMassRateCollection(Collection):
     def __iter__(self) -> Iterator[WorkingMassRateDataSeries]:
         return super().__iter__()
 
-    def average(self, mode=None) -> WorkingMassRateDataSeries:
+    def average(self, mode: AverageMethod=AverageMethod.equal_groups) -> WorkingMassRateDataSeries:
         if not self.series:
             return None
         elif len(self.series) == 1:
@@ -76,12 +77,24 @@ class WorkingMassRateCollection(Collection):
         ts = [series.t for series in self]
         ms = [series.dmdt for series in self]
         es = [series.errs for series in self]
+        count = sum([series.contributions for series in self])
 
-        t, m = ts_combine(ts, ms)  # TODO: averaging modes
+        if mode == AverageMethod.equal_groups:
+            w = None
+        elif mode == AverageMethod.equal_series:
+            _max = max([s.contributions for s in self])
+            w = [series.contributions/_max for series in self]
+        elif mode == AverageMethod.inverse_errs:
+            w = [np.reciprocal(e) for e in es]
+        else:
+            raise ValueError("Unknown averaging mode: \"{}\"".format(mode))
+
+        t, m = ts_combine(ts, ms, w=w)
         _, e = ts_combine(ts, es, error=True)
 
         return WorkingMassRateDataSeries(
-            None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
+            None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e,
+            contributions=count
         )
 
     def sum(self, error_method=ErrorMethod.sum) -> WorkingMassRateDataSeries:
@@ -132,8 +145,10 @@ class WorkingMassRateCollection(Collection):
         else:
             raise ValueError("unknown error computation method: \"{}\"".format(error_method))
 
+        count = sum([series.contributions for series in self])
         return WorkingMassRateDataSeries(
-            None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
+            None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e,
+            contributions=count
         )
 
     def integrate(self, offset=None) -> "model.collections.MassChangeCollection":

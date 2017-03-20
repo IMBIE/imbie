@@ -114,7 +114,9 @@ def weighted_combine(t, y, w=None, nsigma=0, error=False, average=False,
         # increment the values in c1 for each current point
         c1[m1] += w2[m2]
     # set any zeros in c1 to ones
-    c11 = np.maximum(c1, np.ones(c1.shape))
+    # c11 = np.maximum(c1, np.ones(c1.shape))
+    c11 = c1.copy()
+    c11[c11 == 0] = 1.
     # use c1 to calculate the element-wise average of the data
     if error:
         # y1 = np.sqrt(y1 / c11) / np.sqrt(c11)

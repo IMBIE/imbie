@@ -14,17 +14,28 @@ class DataSeries(metaclass=ABCMeta):
 
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, computed: bool=False, merged: bool=False,
-                 aggregated: bool=False):
+                 aggregated: bool=False, contributions: int=1):
+        # name of user
         self.user = user
+        # experiment group
         self.user_group = user_group
+        # experiment group (from data files)
         self.data_group = data_group
+        # zwally/rignot/generic
         self.basin_group = basin_group
+        # basin/ice-sheet id
         self.basin_id = basin_id
+        # full basin area
         self.basin_area = basin_area
 
+        # True if series has been converted from dM/dt or dM
         self.computed = computed
+        # True if series has been merged from Rignot & Zwally
         self.merged = merged
+        # True if series has been computed from indiv. basins
         self.aggregated = aggregated
+        # number of contributing data series
+        self.contributions = contributions
 
     def limit_times(self, min_t: float=None, max_t: float=None) -> None:
         if min_t is not None:

@@ -25,10 +25,10 @@ class MassRateDataSeries(DataSeries):
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, t_start: np.ndarray, t_end: np.ndarray,
                  area: np.ndarray, rate: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False,
-                 aggregated: bool=False):
+                 aggregated: bool=False, contributions: int=1):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged, aggregated
+            computed, merged, aggregated, contributions
         )
         self.t0 = t_start
         self.t1 = t_end
@@ -164,10 +164,11 @@ class MassRateDataSeries(DataSeries):
 class WorkingMassRateDataSeries(DataSeries):
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
-                 dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False):
+                 dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False,
+                 contributions: int=1):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged, aggregated
+            computed, merged, aggregated, contributions
         )
         self.t = time
         self.a = area
