@@ -378,107 +378,50 @@ class Plotter:
         self.fig.set_size_inches(16, 9)
         return prefix+"_split_time_bars_"+sheet.value, {'loc': 4, 'frameon': False}
 
-    @render_plot_with_legend
-    def rignot_vs_zwally_scatter(self, data, *sheets):
-        _min = None
-        _max = None
 
-        rms_all = 0
-        rms_sub = 0
-        num_all = 0
-        num_sub = 0
-
-        if not sheets:
-            suffix = "all"
-            sheets = iter(IceSheet)
-        else:
-            suffix = "_".join(s.value for s in sheets)
+    @render_plot
+    def rignot_zwally_comparison(self, data: WorkingMassRateCollection, sheets: Sequence[IceSheet]) -> str:
 
         for sheet in sheets:
-            z_rate = {}
-            r_rate = {}
-            z_errs = {}
-            r_errs = {}
-            groups = {}
+            rignot_data = data.filter(
+                basin_group=BasinGroup.rignot, basin_id=sheet
+            )
+            zwally_data = data.filter(
+                basin_group=BasinGroup.zwally, basin_id=sheet
+            )
+            zwally_users = {s.user for s in zwally_data}
+            rignot_users = {s.user for s in rignot_data}
+            users = zwally_users.intersection(rignot_users)
 
-            rate = [r_rate, z_rate]
-            errs = [r_errs, z_errs]
-            pair = [BasinGroup.rignot,
-                    BasinGroup.zwally]
+            for user in users:
+                zwally_series = zwally_data.filter(user=user).first()
+                rignot_series = rignot_data.filter(user=user).first()
 
-            self.labels = []
-            self.glyphs = []
+                self.ax.errorbar(
+                    x=zwally_series.mean, xerr=zwally_series.sigma,
+                    y=rignot_series.mean, yerr=rignot_series.sigma,
+                    ecolor=style.primary[zwally_series.user_group]
+                )
 
-            for cat, r, e in zip(pair, rate, errs):
-                for series in data[sheet]:
-                    if series.basin_group != cat:
-                        continue
-                    u = series.user
-                    groups[u] = series.user_group
+        ymin, ymax = self.ax.get_ylim()
+        xmin, xmax = self.ax.get_xlim()
+        min_rate = min(xmin, ymin)
+        max_rate = max(xmax, ymax)
 
-                    r[u] = series.mean
-                    e[u] = series.sigma
+        self.ax.plot(
+            [min_rate, max_rate], [min_rate, max_rate], 'k--'
+        )
 
-            z_vals = []
-            r_vals = []
-
-            for u in z_rate:
-                if u not in r_rate: continue
-
-                z_vals.append(z_rate[u])
-                r_vals.append(r_rate[u])
-
-                sqr_diff = (z_rate[u] - r_rate[u]) ** 2
-
-                rms_all += sqr_diff
-                num_all += 1
-                if u != "Blazquez":
-                    rms_sub += sqr_diff
-                    num_sub += 1
-
-                z_mean = [z_rate[u], z_rate[u]]
-                z_line = [z_rate[u] - z_errs[u],
-                          z_rate[u] + z_errs[u]]
-                r_mean = [r_rate[u], r_rate[u]]
-                r_line = [r_rate[u] - r_errs[u],
-                          r_rate[u] + r_errs[u]]
-                g = groups[u]
-                grp = self._group_names[g]
-                if grp not in self.labels:
-                    self.labels.append(grp)
-                    self.glyphs.append(
-                        self.group_glyph(g)
-                    )
-
-                c = style.colours.primary[g]
-
-                self.ax.plot(z_mean, r_line, color=c)
-                self.ax.plot(z_line, r_mean, color=c)
-                if suffix != "all":
-                    self.ax.text(z_rate[u], r_rate[u], ' '+u)
-
-                if _min is None or min(r_line) < _min:
-                    _min = min(r_line)
-                if _max is None or max(r_line) > _max:
-                    _max = max(r_line)
-                if _min is None or min(z_line) < _min:
-                    _min = min(z_line)
-                if _max is None or max(z_line) > _max:
-                    _max = max(z_line)
-            self.ax.scatter(z_vals, r_vals)
-
-        self.ax.plot([_min, _max], [_min, _max], color='k')
+        self.ax.set_xlim(min_rate, max_rate)
+        self.ax.set_ylim(min_rate, max_rate)
         self.ax.set_xlabel('Zwally dM/dt (Gt/yr)')
         self.ax.set_ylabel('Rignot dM/dt (Gt/yr)')
-        self.ax.set_xlim(_min, _max)
-        self.ax.set_ylim(_min, _max)
-
+        self.fig.suptitle("Rignot/Zwally Comparison")
+        if len(sheets) == 1:
+            self.ax.set_title(self._sheet_names[sheets[0]])
         self.ax.grid()
 
-        # print(suffix, math.sqrt(rms_all / num_all), math.sqrt(rms_sub / num_sub))
-
-        self.fig.set_size_inches(16, 9)
-        return "rignot_vs_zwally_scatter_"+suffix, {'loc': 4, 'frameon': False}
+        return "rignot_zwally_comparison_" + "_".join([s.value for s in sheets])
 
     @render_plot_with_legend
     def basin_errors(self, basins, data, name, sheets=None):

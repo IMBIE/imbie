@@ -14,6 +14,8 @@ class CollectionsManager:
 
     def add_series(self, series) -> None:
         series.limit_times(self.min_t, self.max_t)
+        if not series:
+            return
 
         if series.basin_id in self.collections:
             self.collections[series.basin_id].add_series(series)

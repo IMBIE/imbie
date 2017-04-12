@@ -1,11 +1,11 @@
+from collections import OrderedDict
+
+from imbie2.conf import ImbieConfig
 from imbie2.const.basins import IceSheet, BasinGroup, ZwallyBasin, RignotBasin
 from imbie2.const.error_methods import ErrorMethod
 from imbie2.model.collections import WorkingMassRateCollection, MassChangeCollection, MassRateCollection
 from imbie2.plot.plotter import Plotter
-from imbie2.plot.table import MeanErrorsTable, TimeCoverageTable, BasinsTable
-from imbie2.conf import ImbieConfig
-
-from collections import OrderedDict
+from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable
 
 
 def process(input_data: MassRateCollection, config: ImbieConfig):
@@ -41,7 +41,6 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
                     continue
 
                 if len(sheet_data) == len(basins):
-                    print(user, sheet.name, group.name)
                     series = sheet_data.sum(error_method=ErrorMethod.rss)
 
                     series.basin_id = sheet
@@ -50,6 +49,9 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
                     series.aggregated = True
 
                     rate_data.add_series(series)
+
+    zwally_data = rate_data.filter(basin_group=BasinGroup.zwally)
+    rignot_data = rate_data.filter(basin_group=BasinGroup.rignot)
 
     rate_data.merge()
 
@@ -122,22 +124,21 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
     # print tables
 
-    met = MeanErrorsTable(rate_data, msword=True)
+    # met = MeanErrorsTable(rate_data)
     # f.write(met.get_html_string())
-    print(met)
-
-    btz = BasinsTable(rate_data, BasinGroup.zwally, msword=True)
+    # print(met)
+    btz = BasinsTable(zwally_data, BasinGroup.zwally)
     # f.write(btz.get_html_string())
     print(btz)
 
-    btr = BasinsTable(rate_data, BasinGroup.rignot, msword=True)
+    btr = BasinsTable(rignot_data, BasinGroup.rignot)
     # f.write(btr.get_html_string())
     print(btr)
 
-    for group in groups:
-        tct = TimeCoverageTable(rate_data.filter(user_group=group), msword=True)
-        # f.write(tct.get_html_string())
-        print(tct)
+    # for group in groups:
+    #     tct = TimeCoverageTable(rate_data.filter(user_group=group))
+    #     # f.write(tct.get_html_string())
+    #     print(tct)
 
     # draw plots
     plotter = Plotter(
@@ -145,6 +146,12 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         path=config.output_path,
         limits=True
     )
+    # rignot/zwally comparison
+    for sheet in sheets:
+        plotter.rignot_zwally_comparison(
+            rignot_data+zwally_data, [sheet]
+        )
+    # error bars (IMBIE1 style plot)
     plotter.sheets_error_bars(
         groups_regions_rate, regions_rate, groups, regions
     )

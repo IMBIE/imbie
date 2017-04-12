@@ -7,6 +7,7 @@ from imbie2.const.error_methods import ErrorMethod
 
 from typing import Iterator
 import numpy as np
+from scipy.io import savemat
 
 
 class MassChangeCollection(Collection):
@@ -84,6 +85,14 @@ class MassChangeCollection(Collection):
         return MassChangeDataSeries(
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e
         )
+
+    def savemat(self, filename):
+        data = {
+            't': [s.t for s in self],
+            'dm': [s.mass for s in self],
+            'e': [s.errs for s in self]
+        }
+        savemat(filename, data)
 
     def sum(self, error_method: ErrorMethod=ErrorMethod.sum) -> MassChangeDataSeries:
         if not self.series:

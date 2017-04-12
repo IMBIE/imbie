@@ -6,6 +6,7 @@ from imbie2.conf import ImbieConfig
 import logging
 import os
 from .process import process
+from .process_mass import process_mass
 
 
 def main():
@@ -31,6 +32,7 @@ def main():
     fullnames = set()
 
     # search input directory
+    log = open("log.txt", 'w')
     for user in UserData.find(root):
         if user.name in config.users_skip:
             continue
@@ -45,6 +47,8 @@ def main():
             names.add(series.user)
             fullnames.add(fullname)
 
+            log.write(", ".join(str(s) for s in [fullname, series.user, series.basin_group, series.basin_id]) + "\n")
+
         for series in user.mass_data(convert=False):
             if series is None:
                 continue
@@ -57,9 +61,14 @@ def main():
         if not sheets:
             continue
 
+    log.close()
+
     # rate_col = mass_mgr.as_collection().differentiate() + rate_mgr.as_collection().chunk_series()
 
     # convert manager to collection
     rate_col = rate_mgr.as_collection()
+    mass_col = mass_mgr.as_collection()
     # process the data
+
+    # process_mass(mass_col, config)
     process(rate_col, config)

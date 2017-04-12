@@ -95,6 +95,9 @@ class MassRateDataSeries(DataSeries):
     def __len__(self) -> int:
         return len(self.t0)
 
+    def __bool__(self) -> bool:
+        return len(self) > 0
+
     @property
     def sigma(self) -> float:
         return math.sqrt(
@@ -222,14 +225,7 @@ class WorkingMassRateDataSeries(DataSeries):
 
     @classmethod
     def merge(cls, a: "WorkingMassRateDataSeries", b: "WorkingMassRateDataSeries") -> "WorkingMassRateDataSeries":
-        try:
-            ia, ib = match(a.t, b.t)
-        except IndexError:
-            print(a.user, a.t, b.t)
-        if a.user.lower() == "helm":
-            print(a.t, b.t)
-            print(a.t, b.t)
-            print(ia, ib)
+        ia, ib = match(a.t, b.t)
 
         if len(a) != len(b):
             return None

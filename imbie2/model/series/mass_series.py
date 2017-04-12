@@ -48,7 +48,10 @@ class MassChangeDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.mass = self.mass[ok]
-        self.a = self.a[ok]
+	# cropping the area has been removed as it was causing indexing
+	# errors. This isn't a currently a problem as the area isn't used
+	# in the analysis. TODO: find a proper solution to this
+        # self.a = self.a[ok]
         self.errs = self.errs[ok]
 
     def _set_max_time(self, max_t: float) -> None:
@@ -56,7 +59,7 @@ class MassChangeDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.mass = self.mass[ok]
-        self.a = self.a[ok]
+        # self.a = self.a[ok[:len(self.a)]]
         self.errs = self.errs[ok]
 
     @classmethod
@@ -87,6 +90,9 @@ class MassChangeDataSeries(DataSeries):
 
     def __len__(self) -> int:
         return len(self.t)
+
+    def __bool__(self) -> bool:
+        return len(self) > 0
 
     @classmethod
     def merge(cls, a: "MassChangeDataSeries", b: "MassChangeDataSeries") -> "MassChangeDataSeries":
