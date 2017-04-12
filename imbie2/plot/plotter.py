@@ -178,8 +178,8 @@ class Plotter:
             plt.savefig(fpath, dpi=192)
             self.ax.clear()
             self.fig.clear()
-            #
-            print(fpath)
+
+            print("saving plot:", fpath)
 
     def clear_plot(self):
         self.ax = plt.gca()

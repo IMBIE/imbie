@@ -2,6 +2,7 @@ from imbie2.data.user import UserData
 from imbie2.const.basins import *
 from imbie2.model.managers import *
 from imbie2.conf import ImbieConfig
+from imbie2.version import __version__
 
 import logging
 import os
@@ -13,9 +14,13 @@ def main():
     """
     main IMBIE2 process
     """
+    print("IMBIE processor v{}".format(__version__))
+
+    print("reading configuration", end="... ")
     # read the config file
     config = ImbieConfig("config")
     config.open()
+    print("done.")
 
     # set logging label (todo: add this to config?)
     logging.basicConfig(level=logging.CRITICAL)
@@ -31,6 +36,7 @@ def main():
     names = set()
     fullnames = set()
 
+    print("reading input data from", root, end="... ")
     # search input directory
     log = open("log.txt", 'w')
     for user in UserData.find(root):
@@ -60,7 +66,7 @@ def main():
 
         if not sheets:
             continue
-
+    print("done.")
     log.close()
 
     # rate_col = mass_mgr.as_collection().differentiate() + rate_mgr.as_collection().chunk_series()
