@@ -2,7 +2,8 @@ from prettytable import PrettyTable, MSWORD_FRIENDLY
 from collections import OrderedDict
 from typing import Sequence, Any, Union, Iterator, Callable
 
-from imbie2.const.basins import IceSheet, BasinGroup, ZwallyBasin, RignotBasin, Basin
+from imbie2.const.basins import IceSheet, Basin
+from imbie2.const.table_formats import TableFormat
 from imbie2.model.collections import MassChangeCollection, WorkingMassRateCollection
 
 Collection = Union[MassChangeCollection, WorkingMassRateCollection]
@@ -28,17 +29,62 @@ class Table(PrettyTable):
         IceSheet.gris: "Greenland"
     }
 
-    def __init__(self, *field_names, **kwargs):
-        word_mode = kwargs.pop('msword', False)
-
+    def __init__(self, *field_names, style: TableFormat=TableFormat.fancy, **kwargs):
         super().__init__(field_names=field_names, **kwargs)
-        if word_mode:
+
+        if style == TableFormat.msword:
             self.set_style(MSWORD_FRIENDLY)
+        self._format = style
 
         self._auto_cols = OrderedDict()
 
         self._primary_vals = []
         self._primary_attr = None
+
+    def write(self, filename: str, **kwargs) -> None:
+        """
+        write the table to a file
+
+        :param filename: the path to the file
+        """
+        with open(filename, 'w') as f:
+            f.write(self.get_string(**kwargs))
+
+    def default_extension(self) -> str:
+        """
+        get the default file extension for using to
+        save this table
+        """
+        if self._format == TableFormat.html:
+            return "html"
+        if self._format == TableFormat.csv:
+            return "csv"
+        return "txt"
+
+    def get_string(self, **kwargs) -> str:
+        if self._format == TableFormat.html:
+            return self.get_html_string()
+
+        elif self._format == TableFormat.csv:
+            # create header line
+            string = ",".join([field for field in self._get_field_names()]) + "\n"
+
+            # iterate over rows of data
+            for row in self:
+                # remove headers and borders
+                row.border = False
+                row.header = False
+
+                # create comma-separated line of data
+                line = ",".join(
+                    [row.get_string(fields=[field]).strip().replace('\n', '') for
+                       field in self._get_field_names()]
+                )
+                string += line + "\n"
+            return string
+
+        else:
+            return super().get_string(**kwargs)
 
     def add_primary_column(self, name: str, attr: str, values: Sequence[Any]) -> None:
         """

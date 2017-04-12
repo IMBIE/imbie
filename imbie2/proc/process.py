@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import os
 
 from imbie2.conf import ImbieConfig
 from imbie2.const.basins import IceSheet, BasinGroup, ZwallyBasin, RignotBasin
@@ -71,6 +72,8 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
     for group in groups:
         for sheet in sheets:
+            print("computing", group, "average for", sheet.value, end="... ")
+
             new_series = rate_data.filter(
                 user_group=group, basin_id=sheet
             ).average(mode=config.combine_method)
@@ -81,8 +84,10 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
             groups_sheets_mass.add_series(
                 new_series.integrate(offset=offset)
             )
-
+            print("done.")
         for region, sheets in regions.items():
+            print("computing", group, "average for", region.value, end="... ")
+
             region_rate = groups_sheets_rate.filter(
                 user_group=group, basin_id=sheets
             ).sum()
@@ -94,8 +99,10 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
             groups_regions_rate.add_series(region_rate)
             groups_regions_mass.add_series(region_mass)
-
+            print("done.")
     for sheet in sheets:
+        print("computing inter-group average for", sheet.value, end="... ")
+
         sheet_rate_avg = groups_sheets_rate.filter(
             basin_id=sheet
         ).average(mode=config.combine_method)
@@ -106,9 +113,12 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         sheets_mass.add_series(
             sheet_rate_avg.integrate(offset=offset)
         )
+        print("done.")
 
     # compute region figures
     for region, sheets in regions.items():
+        print("computing inter-group average for", region.value, end="... ")
+
         region_rate = sheets_rate.filter(
             basin_id=sheets
         ).sum()
@@ -121,24 +131,34 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         regions_mass.add_series(
             region_rate.integrate(offset=offset)
         )
+        print("done.")
 
     # print tables
 
-    # met = MeanErrorsTable(rate_data)
-    # f.write(met.get_html_string())
-    # print(met)
-    btz = BasinsTable(zwally_data, BasinGroup.zwally)
-    # f.write(btz.get_html_string())
-    print(btz)
+    met = MeanErrorsTable(rate_data)
+    filename = os.path.join(config.output_path, "mean_errors."+met.default_extension())
 
-    btr = BasinsTable(rignot_data, BasinGroup.rignot)
-    # f.write(btr.get_html_string())
-    print(btr)
+    print("writing table:", filename)
+    met.write(filename)
 
-    # for group in groups:
-    #     tct = TimeCoverageTable(rate_data.filter(user_group=group))
-    #     # f.write(tct.get_html_string())
-    #     print(tct)
+    btz = BasinsTable(zwally_data, BasinGroup.zwally, style=config.table_format)
+    filename = os.path.join(config.output_path, "zwally_basins."+btz.default_extension())
+
+    print("writing table:", filename)
+    btz.write(filename)
+
+    btr = BasinsTable(rignot_data, BasinGroup.rignot, style=config.table_format)
+    filename = os.path.join(config.output_path, "rignot_basins." + btr.default_extension())
+
+    print("writing table:", filename)
+    btr.write(filename)
+
+    for group in groups:
+        tct = TimeCoverageTable(rate_data.filter(user_group=group), style=config.table_format)
+        filename = os.path.join(config.output_path, "time_coverage_" + group + "." + tct.default_extension())
+
+        print("writing table:", filename)
+        tct.write(filename)
 
     # draw plots
     plotter = Plotter(

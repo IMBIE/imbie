@@ -5,8 +5,10 @@ from warnings import warn
 
 from .config_errors import *
 from .config_param import ConfigParam
+
 from imbie2.const.groups import Group
 from imbie2.const.average_methods import AverageMethod
+from imbie2.const.table_formats import TableFormat
 
 
 class ConfigFile:
@@ -63,7 +65,9 @@ class ConfigFile:
 class ImbieConfig(ConfigFile):
     input_path = ConfigParam("input_path", str)
     output_path = ConfigParam("output_path", str)
+
     plot_format = ConfigParam("plot_format", str, options=["png", "jpg", "svg", "pdf"], optional=True)
+    table_format = ConfigParam("table_format", TableFormat, default=TableFormat.fancy)
 
     start_date = ConfigParam("start_date", float, optional=True)
     stop_date = ConfigParam("stop_date", float, optional=True)
