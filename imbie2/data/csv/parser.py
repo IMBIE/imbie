@@ -67,7 +67,10 @@ class FileParser(metaclass=ABCMeta):
         try:
             self.open()
             return self
-        except:  # (FileParserError, ParsingError):
+        except Exception as e:  # (FileParserError, ParsingError):
+            logging.error(
+                "Failed to open file: {}".format(self.filename)
+            )
             return None
 
     def __exit__(self, exc_type, exc_val, exc_tb):

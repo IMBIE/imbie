@@ -1,28 +1,54 @@
 from imbie2.data.user import UserData
 from imbie2.const.basins import *
+from imbie2.const.error_codes import ErrorCode
 from imbie2.model.managers import *
-from imbie2.conf import ImbieConfig
+from imbie2.conf import ImbieConfig, ConfigError
 from imbie2.version import __version__
+from .process import process
+# from .process_mass import process_mass
 
 import logging
 import os
-from .process import process
-from .process_mass import process_mass
+import argparse
 
+__doc__ = """
+The IMBIE processor.
+
+This program discovers and parses data from IMBIE contributions
+in order to collate, process, and analyse dM and dM/dt time-series
+for ice sheets in Antarctica and Greenland.
+
+Options are configured via a configuration file, which must be
+provided as an argument to the processor.
+"""
 
 def main():
     """
-    main IMBIE2 process
+    main IMBIE process
     """
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('config', type=str, help="Path to an IMBIE configuration file")
+    cfg_path = parser.parse_args().config
+
     print("IMBIE processor v{}".format(__version__))
+
+    if not os.path.exists(cfg_path):
+        print("config file does not exist: {}".format(cfg_path))
+        return ErrorCode.config_missing.value
 
     print("reading configuration", end="... ")
     # read the config file
-    config = ImbieConfig("config")
-    config.open()
+    config = ImbieConfig(cfg_path)
+    try:
+        config.open()
+    except ConfigError as e:
+        print("error reading config file:")
+        print(e)
+        return ErrorCode.config_invalid.value
+
     print("done.")
 
-    # set logging label (todo: add this to config?)
+    # set logging level (todo: add this to config?)
     logging.basicConfig(level=logging.CRITICAL)
 
     # create empty dM/dt and dM managers
@@ -31,6 +57,9 @@ def main():
 
     # expand input directory
     root = os.path.expanduser(config.input_path)
+    if not os.path.exists(root):
+        print("input directory does not exist")
+        return ErrorCode.input_path.value
 
     # create sets for usernames & full names
     names = set()
@@ -38,7 +67,6 @@ def main():
 
     print("reading input data from", root, end="... ")
     # search input directory
-    log = open("log.txt", 'w')
     for user in UserData.find(root):
         if user.name in config.users_skip:
             continue
@@ -53,7 +81,8 @@ def main():
             names.add(series.user)
             fullnames.add(fullname)
 
-            log.write(", ".join(str(s) for s in [fullname, series.user, series.basin_group, series.basin_id]) + "\n")
+            line = ", ".join(str(s) for s in [fullname, series.user, series.basin_group, series.basin_id]) + "\n"
+            logging.info(line)
 
         for series in user.mass_data(convert=False):
             if series is None:
@@ -67,14 +96,11 @@ def main():
         if not sheets:
             continue
     print("done.")
-    log.close()
-
-    # rate_col = mass_mgr.as_collection().differentiate() + rate_mgr.as_collection().chunk_series()
+    if not rate_mgr:
+        print("no data in input directory")
+        return ErrorCode.no_data.value
 
     # convert manager to collection
     rate_col = rate_mgr.as_collection()
-    mass_col = mass_mgr.as_collection()
     # process the data
-
-    # process_mass(mass_col, config)
     process(rate_col, config)

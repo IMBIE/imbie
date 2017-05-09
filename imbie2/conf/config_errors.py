@@ -1,14 +1,19 @@
 from typing import Sequence, Any
 
 
-class ParameterTypeError(Exception):
+class ConfigError(Exception):
+    pass
+
+
+class ParameterTypeError(ConfigError):
     def __init__(self, param_name: str, param_type: type, actual_type: type):
         message = "parameter \"{}\" expected type {}, got type {}".format(
             param_name, param_type, actual_type
         )
         super().__init__(message)
 
-class ParameterValueError(Exception):
+
+class ParameterValueError(ConfigError):
     def __init__(self, param_name: str, param_values: Sequence[Any], actual_value: Any):
         options = ", ".join(str(i) for i in param_values)
 
@@ -17,10 +22,12 @@ class ParameterValueError(Exception):
         )
         super().__init__(message)
 
-class MissingParameterError(Exception):
+
+class MissingParameterError(ConfigError):
     def __init__(self, param_name: str):
         message = "parameter \"{}\" has not been defined".format(param_name)
         super().__init__(message)
+
 
 class UnknownParameterWarning(Warning):
     def __init__(self, param_name: str):
