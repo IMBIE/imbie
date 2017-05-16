@@ -4,7 +4,7 @@ from .functions import ts2m, match
 import numpy as np
 
 
-def sum_series(ts, data):
+def sum_series(ts, data, ret_mask=False):
     if len(ts) == 1:
         return ts[0], data[0]
 
@@ -30,4 +30,6 @@ def sum_series(ts, data):
         t >= beg_t,
         t <= end_t
     )
+    if ret_mask:
+        return t[ok], out[ok], ok
     return t[ok], out[ok]

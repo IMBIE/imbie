@@ -96,9 +96,12 @@ def main():
         if not sheets:
             continue
     print("done.")
+
     if not rate_mgr:
         print("no data in input directory")
         return ErrorCode.no_data.value
+    else:
+        print(len(rate_mgr), "contributions read")
 
     # convert manager to collection
     rate_col = rate_mgr.as_collection()

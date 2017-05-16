@@ -49,7 +49,7 @@ class WorkingMassRateCollection(Collection):
     def __iter__(self) -> Iterator[WorkingMassRateDataSeries]:
         return super().__iter__()
 
-    def average(self, mode: AverageMethod=AverageMethod.equal_groups) -> WorkingMassRateDataSeries:
+    def average(self, mode: AverageMethod=AverageMethod.equal_groups, nsigma: float=None) -> WorkingMassRateDataSeries:
         if not self.series:
             return None
         elif len(self.series) == 1:
@@ -89,8 +89,8 @@ class WorkingMassRateCollection(Collection):
         else:
             raise ValueError("Unknown averaging mode: \"{}\"".format(mode))
 
-        t, m = ts_combine(ts, ms, w=w)
-        _, e = ts_combine(ts, es, error=True)
+        t, m = ts_combine(ts, ms, w=w, nsigma=nsigma)
+        _, e = ts_combine(ts, es, error=True, nsigma=nsigma)
 
         return WorkingMassRateDataSeries(
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e,
@@ -129,7 +129,8 @@ class WorkingMassRateCollection(Collection):
             es = [series.errs for series in self]
 
             _, e = ts_combine(ts, es, error=True)
-            t, m = sum_series(ts, ms)
+            t, m, o = sum_series(ts, ms, ret_mask=True)
+            e = e[o]
         elif error_method == ErrorMethod.rss:
             es = [series.errs for series in self]
 
@@ -142,6 +143,7 @@ class WorkingMassRateCollection(Collection):
 
             _, e = sum_series(ts, es)
             t, m = sum_series(ts, ms)
+
         else:
             raise ValueError("unknown error computation method: \"{}\"".format(error_method))
 
@@ -156,6 +158,14 @@ class WorkingMassRateCollection(Collection):
         for series in self:
             out.add_series(series.integrate(offset=offset))
 
+        return out
+
+    def smooth(self, window=None, clip=False) -> "WorkingMassRateCollection":
+        if window is None:
+            return self
+        out = WorkingMassRateCollection()
+        for s in self:
+            out.add_series(s.smooth(window=window, clip=clip))
         return out
 
     def filter(self, **kwargs) -> "WorkingMassRateCollection":

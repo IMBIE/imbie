@@ -4,7 +4,7 @@ from collections import Sequence
 from .functions import *
 
 
-def weighted_combine(t, y, w=None, nsigma=0, error=False, average=False,
+def weighted_combine(t, y, w=None, nsigma=None, error=False, average=False,
                      verbose=False, ret_data_out=False):
     """
     Combines a number of input sequences
@@ -74,7 +74,7 @@ def weighted_combine(t, y, w=None, nsigma=0, error=False, average=False,
         ok = np.logical_and(
             _id == i, np.isfinite(y)
         )
-        if nsigma:
+        if nsigma is not None:
             # if nsigma has been specified, eliminate values far from the mean
             ok[ok] = np.abs(y[ok] - np.nanmean(y)) < max(nsigma, 1)*np.nanstd(y)
         # if we've eliminated all values in the current input, skip to the next one.

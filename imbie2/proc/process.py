@@ -76,7 +76,7 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
             new_series = rate_data.filter(
                 user_group=group, basin_id=sheet
-            ).average(mode=config.combine_method)
+            ).average(mode=config.combine_method, nsigma=config.average_nsigma)
             if new_series is None:
                 continue
 
@@ -90,7 +90,7 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
             region_rate = groups_sheets_rate.filter(
                 user_group=group, basin_id=sheets
-            ).sum()
+            ).sum(error_method=config.sum_errors_method)
             if region_rate is None:
                 continue
 
@@ -105,7 +105,7 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
         sheet_rate_avg = groups_sheets_rate.filter(
             basin_id=sheet
-        ).average(mode=config.combine_method)
+        ).average(mode=config.combine_method, nsigma=config.average_nsigma)
         if sheet_rate_avg is None:
             continue
 
@@ -121,7 +121,7 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
         region_rate = sheets_rate.filter(
             basin_id=sheets
-        ).sum()
+        ).sum(error_method=config.sum_errors_method)
         if region_rate is None:
             continue
 
@@ -134,28 +134,29 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         print("done.")
 
     # print tables
+    output_path = os.path.expanduser(config.output_path)
 
     met = MeanErrorsTable(rate_data)
-    filename = os.path.join(config.output_path, "mean_errors."+met.default_extension())
+    filename = os.path.join(output_path, "mean_errors."+met.default_extension())
 
     print("writing table:", filename)
     met.write(filename)
 
     btz = BasinsTable(zwally_data, BasinGroup.zwally, style=config.table_format)
-    filename = os.path.join(config.output_path, "zwally_basins."+btz.default_extension())
+    filename = os.path.join(output_path, "zwally_basins."+btz.default_extension())
 
     print("writing table:", filename)
     btz.write(filename)
 
     btr = BasinsTable(rignot_data, BasinGroup.rignot, style=config.table_format)
-    filename = os.path.join(config.output_path, "rignot_basins." + btr.default_extension())
+    filename = os.path.join(output_path, "rignot_basins." + btr.default_extension())
 
     print("writing table:", filename)
     btr.write(filename)
 
     for group in groups:
         tct = TimeCoverageTable(rate_data.filter(user_group=group), style=config.table_format)
-        filename = os.path.join(config.output_path, "time_coverage_" + group + "." + tct.default_extension())
+        filename = os.path.join(output_path, "time_coverage_" + group + "." + tct.default_extension())
 
         print("writing table:", filename)
         tct.write(filename)
@@ -163,7 +164,7 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
     # draw plots
     plotter = Plotter(
         filetype=config.plot_format,
-        path=config.output_path,
+        path=output_path,
         limits=True
     )
     # rignot/zwally comparison
@@ -181,9 +182,9 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
             rate_data.filter(user_group=group), {s: s for s in sheets}, suffix=group
         )
         plotter.group_rate_intracomparison(
-            groups_regions_rate.filter(user_group=group),
-            rate_data.filter(user_group=group), regions, suffix=group,
-            mark=["Zwally", "Sandberg Sorensen", "Rietbroek"]
+            groups_regions_rate.filter(user_group=group).smooth(config.plot_smooth_window),
+            rate_data.filter(user_group=group).smooth(config.plot_smooth_window),
+            regions, suffix=group, mark=["Zwally", "Sandberg Sorensen", "Rietbroek"]
         )
         plotter.group_mass_intracomparison(
             groups_regions_mass.filter(user_group=group),
@@ -195,7 +196,8 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
         reg = {_id: region}
 
         plotter.groups_rate_intercomparison(
-            regions_rate, groups_regions_rate, reg
+            regions_rate.smooth(config.plot_smooth_window),
+            groups_regions_rate.smooth(config.plot_smooth_window), reg
         )
         plotter.groups_mass_intercomparison(
             regions_mass, groups_regions_mass, reg
@@ -210,3 +212,18 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
     plotter.regions_mass_intercomparison(
         regions_mass, *all_regions
     )
+
+    if not config.export_data:
+        return
+
+    # write data to files
+    for region in regions:
+        data = regions_rate.filter(basin_id=region).first()
+        fname = os.path.join(output_path, region.value+".csv")
+
+        print("exporting data:", fname, end="... ")
+        with open(fname, 'w') as f:
+            for line in zip(data.t, data.dmdt, data.errs):
+                line = ", ".join(map(str, line)) + "\n"
+                f.write(line)
+        print("done.")

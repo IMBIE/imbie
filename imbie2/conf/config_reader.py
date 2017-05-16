@@ -8,6 +8,7 @@ from .config_param import ConfigParam
 
 from imbie2.const.groups import Group
 from imbie2.const.average_methods import AverageMethod
+from imbie2.const.error_methods import ErrorMethod
 from imbie2.const.table_formats import TableFormat
 
 
@@ -77,3 +78,9 @@ class ImbieConfig(ConfigFile):
 
     combine_method = ConfigParam("combine_method", AverageMethod, default=AverageMethod.equal_groups)
     align_date = ConfigParam("align_date", float, optional=True)
+    sum_errors_method = ConfigParam("sum_errors_method", ErrorMethod, default=ErrorMethod.sum)
+    average_nsigma = ConfigParam("average_nsigma", float, optional=True)
+    plot_smooth_window = ConfigParam("plot_smooth_window", float, optional=True)
+    # avg_errors_method = ConfigError("avg_errors_method", ErrorMethod, default=ErrorMethod.rms)
+
+    export_data = ConfigParam("export_data", bool, default=False)

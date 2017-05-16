@@ -2,7 +2,7 @@ from .data_series import DataSeries
 import numpy as np
 import math
 
-from imbie2.util.functions import match
+from imbie2.util.functions import match, smooth_imbie
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.const.basins import BasinGroup, Basin
 import imbie2.model as model
@@ -102,7 +102,7 @@ class MassRateDataSeries(DataSeries):
     def sigma(self) -> float:
         return math.sqrt(
             np.nanmean(np.square(self.errs))
-        ) # / math.sqrt(len(self))
+        )  # / math.sqrt(len(self))
 
     @property
     def mean(self) -> float:
@@ -139,21 +139,25 @@ class MassRateDataSeries(DataSeries):
         dmdt_chunks = [self.dmdt[ok]]
         errs_chunks = [self.errs[ok]]
 
-        for i in range(len(self)):
-            if ok[i]: continue
+        if np.all(ok):
+            t = time_chunks[0]
+            dmdt = dmdt_chunks[0]
+            errs = errs_chunks[0]
+        else:
+            for i in range(len(self)):
+                if ok[i]: continue
 
-            time_chunks.append(
-                np.asarray([self.t0[i], self.t1[i]])
-            )
-            dmdt_chunks.append(
-                np.asarray([self.dmdt[i], self.dmdt[i]])
-            )
-            errs_chunks.append(
-                np.asarray([self.errs[i], self.errs[i]])
-            )
-
-        t, dmdt = ts_combine(time_chunks, dmdt_chunks)
-        _, errs = ts_combine(time_chunks, errs_chunks, error=True)
+                time_chunks.append(
+                    np.asarray([self.t0[i], self.t1[i]])
+                )
+                dmdt_chunks.append(
+                    np.asarray([self.dmdt[i], self.dmdt[i]])
+                )
+                errs_chunks.append(
+                    np.asarray([self.errs[i], self.errs[i]])
+                )
+            t, dmdt = ts_combine(time_chunks, dmdt_chunks)
+            _, errs = ts_combine(time_chunks, errs_chunks, error=True)
 
         return WorkingMassRateDataSeries(
             self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
@@ -245,6 +249,16 @@ class WorkingMassRateDataSeries(DataSeries):
         return cls(
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
             a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=aggr
+        )
+
+    def smooth(self, window: float=13./12, clip=False) -> "WorkingMassRateDataSeries":
+        # dmdt = move_av(window, self.dmdt, self.t, clip=clip)
+        dmdt = smooth_imbie(self.t, self.dmdt, window)
+
+        return WorkingMassRateDataSeries(
+            self.user, self.user_group, self.data_group, self.basin_group,
+            self.basin_id, self.basin_area, self.t, self.a, dmdt, self.errs,
+            self.computed, self.merged, self.aggregated
         )
 
     def __len__(self) -> int:

@@ -56,6 +56,8 @@ class FileParser(metaclass=ABCMeta):
         """
         closes the file
         """
+        if self._file is None:
+            return
         self._csv = None
         self._file.close()
 
