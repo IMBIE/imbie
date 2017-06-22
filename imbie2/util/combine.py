@@ -1,11 +1,8 @@
-import numpy as np
-from collections import Sequence
-
 from .functions import *
 
 
 def weighted_combine(t, y, w=None, nsigma=None, error=False, average=False,
-                     verbose=False, ret_data_out=False):
+                     verbose=False, ret_data_out=False, imbie1_error_method=False):
     """
     Combines a number of input sequences
 
@@ -118,8 +115,11 @@ def weighted_combine(t, y, w=None, nsigma=None, error=False, average=False,
     c11 = c1.copy()
     c11[c11 == 0] = 1.
     # use c1 to calculate the element-wise average of the data
-    if error:
-        # y1 = np.sqrt(y1 / c11) / np.sqrt(c11)
+    if imbie1_error_method:
+        # NB: this error method is included for comparability with IMBIE 1 IDL method,
+        #     but is not recommended for normal use
+        y1 = np.sqrt(y1 / c11) / np.sqrt(c11)
+    elif error:
         y1 = np.sqrt(y1 / c11)
     else:
         y1 /= c11

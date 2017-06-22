@@ -213,7 +213,8 @@ class WorkingMassRateDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.dmdt = self.dmdt[ok]
-        self.a = self.a[ok]
+        if self.a is not None:
+            self.a = self.a[ok]
         self.errs = self.errs[ok]
 
     def _set_max_time(self, max_t: float) -> None:
@@ -221,7 +222,8 @@ class WorkingMassRateDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.dmdt = self.dmdt[ok]
-        self.a = self.a[ok]
+        if self.a is not None:
+            self.a = self.a[ok]
         self.errs = self.errs[ok]
 
     def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
@@ -266,3 +268,12 @@ class WorkingMassRateDataSeries(DataSeries):
 
     def chunk_rates(self):
         return self
+
+    def truncate(self, min_time: float, max_time: float) -> "WorkingMassRateDataSeries":
+        trunc = self.__class__(
+            self.user, self.user_group, self.data_group, self.basin_group,
+            self.basin_id, self.basin_area, self.t, self.a, self.dmdt, self.errs,
+            self.computed, self.merged, self.aggregated
+        )
+        trunc.limit_times(min_time, max_time)
+        return trunc

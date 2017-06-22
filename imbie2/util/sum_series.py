@@ -23,7 +23,7 @@ def sum_series(ts, data, ret_mask=False):
         max_tm = np.max(tm)
         if min_tm > beg_t:
             beg_t = min_tm
-        if max_tm > end_t:
+        if max_tm < end_t:
             end_t = max_tm
 
     ok = np.logical_and(

@@ -101,6 +101,8 @@ class Collection(metaclass=ABCMeta):
         return out
 
     def first(self) -> Series:
+        if not self.series:
+            return None
         return self.series[0]
 
     @abstractmethod
