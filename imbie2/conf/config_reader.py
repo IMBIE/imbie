@@ -75,6 +75,7 @@ class ImbieConfig(ConfigFile):
 
     methods_skip = ConfigParam("methods_skip", Group, multiple=True)
     users_skip = ConfigParam("users_skip", str, multiple=True)
+    users_mark = ConfigParam("users_mark", str, multiple=True)
 
     combine_method = ConfigParam("combine_method", AverageMethod, default=AverageMethod.equal_groups)
     align_date = ConfigParam("align_date", float, optional=True)
@@ -84,3 +85,7 @@ class ImbieConfig(ConfigFile):
     # avg_errors_method = ConfigError("avg_errors_method", ErrorMethod, default=ErrorMethod.rms)
 
     export_data = ConfigParam("export_data", bool, default=False)
+    include_la = ConfigParam("enable_la_group", bool, default=False)
+
+    bar_plot_min_time = ConfigParam("bar_plot_min_time", float, optional=True)
+    bar_plot_max_time = ConfigParam("bar_plot_max_time", float, optional=True)

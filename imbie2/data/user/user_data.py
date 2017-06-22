@@ -12,11 +12,13 @@ class UserData:
     _rate_questions = {
         'GMB': 'mascons-approach-upload',
         'RA': 'mean-rate-upload',
+        'LA': 'mean-rate-upload',
         'IOM': 'time-series-accumulation-upload'
     }
     _mass_questions = {
         'GMB': "spherical-harmonics-upload",
         'RA': "time-series-upload",
+        'LA': "time-series-upload",
         'IOM': "mass-balance-upload"
     }
 
