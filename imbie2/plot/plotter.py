@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from matplotlib import lines as mlines
 from matplotlib import patches as mpatches
-import matplotlib as mpl
 import numpy as np
 import math
 import os
@@ -11,7 +10,8 @@ from . import plots
 from . import style
 
 from functools import wraps
-from itertools import cycle, chain
+from itertools import cycle
+from cycler import cycler
 from collections import OrderedDict
 
 from imbie2.const.basins import *
@@ -112,10 +112,10 @@ def render_plot_with_legend(method):
 class Plotter:
     _time0 = 1990
     _time1 = 2020
-    _dmdt0 = -700
+    _dmdt0 = -900
     _dmdt1 = 300
-    _dm0 = -7000
-    _dm1 = 2000
+    _dm0 = -9000
+    _dm1 = 3000
     _set_limits = False
 
     _sheet_names = {
@@ -130,6 +130,7 @@ class Plotter:
         "RA": "Altimetry",
         "GMB": "Gravimetry",
         "IOM": "Mass Budget",
+        "LA": "Laser Altimetry",
         "all": "All"
     }
 
@@ -549,17 +550,29 @@ class Plotter:
 
     @render_plot_with_legend
     def sheets_error_bars(self, group_avgs: WorkingMassRateCollection, sheet_avgs: WorkingMassRateCollection,
-                          methods: Sequence[str], sheets: Sequence[IceSheet]):
+                          methods: Sequence[str], sheets: Sequence[IceSheet], ylabels: bool=False,
+                          window: Tuple[float, float]=None, suffix: str=None):
         # get mean & error dM/dt per ice-sheet and group
         width = len(methods)
         min_y = None
         max_y = None
         max_x = 0
 
+        if window is None:
+            t_min, t_max = None, None
+        else:
+            t_min, t_max = window
+
         for i, sheet in enumerate(sheets):
             max_x += width+1
             # plot all-group patches
-            sheet_series = sheet_avgs.filter(basin_id=sheet).first()
+            sheet_series = sheet_avgs.filter(
+                basin_id=sheet
+            ).first().truncate(t_min, t_max)
+
+            if sheet_series is None:
+                continue
+
             mean = sheet_series.mean
             err = sheet_series.sigma
 
@@ -579,7 +592,10 @@ class Plotter:
             for j, method in enumerate(methods):
                 group_series = group_avgs.filter(
                     user_group=method, basin_id=sheet
-                ).first()
+                ).first().truncate(t_min, t_max)
+
+                if group_series is None:
+                    continue
 
                 mean = group_series.mean
                 err = group_series.sigma
@@ -616,8 +632,11 @@ class Plotter:
         # turn on minor ticks (both axes), then disable x-axis minor ticks
         # self.ax.minorticks_on()
         # self.ax.tick_params(axis='x', which='minor', top='off')
-        self.ax.tick_params(
-            axis='y', which='both', left='off', labelleft='off', right='off')
+        if not ylabels:
+            self.ax.tick_params(
+                axis='y', which='both', left='off', labelleft='off', right='off')
+        else:
+            plt.ylabel("dM/dt (Gt/yr)")
 
         self.ax.set_xlim(-.5, max_x-.5)
         self.ax.set_ylim(min_y - y_margin, max_y + y_margin)
@@ -626,7 +645,10 @@ class Plotter:
         plt.xlabel("Ice Sheet", fontweight='bold')
         self.fig.set_size_inches(16, 9)
 
-        return "sheets_error_bars", {'frameon': False}
+        name = "sheets_error_bars"
+        if suffix is not None:
+            name += "_" + suffix
+        return name, {'frameon': False}
 
     @render_plot
     def group_rate_boxes(self, rate_data: WorkingMassRateCollection, regions, suffix: str=None):
@@ -755,8 +777,9 @@ class Plotter:
                 for contrib in group_contribs.filter(basin_id=sheets):
                     self.ax.plot(contrib.t, contrib.dmdt, color=pcol, ls='--')
                     if contrib.user in mark:
-                        x = contrib.t[-1]
-                        y = contrib.dmdt[-1]
+                        mid = len(contrib.t) // 2
+                        x = contrib.t[mid]
+                        y = contrib.dmdt[mid]
                         self.ax.annotate(
                             contrib.user,
                             xy=(x, y), xytext=(-20, 10),
@@ -795,7 +818,7 @@ class Plotter:
 
     @render_plot
     def group_mass_intracomparison(self, group_avgs: MassChangeCollection, group_contribs: MassChangeCollection,
-                                   regions, suffix: str=None, mark: Sequence[str]=None) -> str:
+                                   regions, suffix: str=None, mark: Sequence[str]=None, align: bool=False) -> str:
         if mark is None:
             mark = []
         plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
@@ -819,6 +842,8 @@ class Plotter:
 
             if len(sheets) == 1:
                 for contrib in group_contribs.filter(basin_id=sheets):
+                    if align:
+                        contrib = contrib.align(avg)
                     self.ax.plot(contrib.t, contrib.mass, color=pcol, ls='--')
                     if contrib.user in mark:
                         x = contrib.t[-1]
@@ -921,7 +946,7 @@ class Plotter:
 
     @render_plot
     def groups_mass_intercomparison(self, region_avgs: MassChangeCollection, group_avgs: MassChangeCollection,
-                                    regions) -> str:
+                                    regions, align: bool=False) -> str:
         plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
 
         for i, (name, sheets) in enumerate(regions.items()):
@@ -942,6 +967,8 @@ class Plotter:
             )
 
             for g_avg in group_avgs.filter(basin_id=name):
+                if align:
+                    g_avg = g_avg.align(x_avg)
                 pcol = style.colours.primary[g_avg.user_group]
                 scol = style.colours.secondary[g_avg.user_group]
 
@@ -1014,6 +1041,54 @@ class Plotter:
         if self._set_limits:
             self.ax.set_ylim(self._dm0, self._dm1)
             self.ax.set_xlim(self._time0, self._time1)
-        self.ax.set_xticklabels(self.ax.xaxis.get_majorticklabels(), rotation=45)
 
         return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}
+
+    @render_plot_with_legend
+    def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection):
+        data = data.filter(user_group=group, basin_id=region)
+
+        colormap = plt.cm.nipy_spectral
+        colorcycle = cycler('color', [colormap(i) for i in np.linspace(0, 1, len(data))])
+        self.ax.set_prop_cycle(colorcycle)
+
+        for series in data:
+            p = self.ax.plot(series.t, series.dmdt, label=series.user)
+            self.glyphs.append(p[0])
+            self.labels.append(series.user)
+
+        # reduce width of plot by 20% to make space for legend
+        box = self.ax.get_position()
+        self.ax.set_position([box.x0, box.y0, box.width*.6, box.height])
+
+        self.ax.set_ylabel("Rate of Mass Change (Gt/yr)")
+        self.ax.set_title(self._sheet_names[region])
+        self.fig.autofmt_xdate()
+
+        return "named_dmdt_"+region.value+"_"+group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+
+    @render_plot_with_legend
+    def named_dm_group_plot(self, region: IceSheet, group: str, data: MassChangeCollection,
+                            basis: MassChangeDataSeries=None):
+        data = data.filter(user_group=group, basin_id=region)
+
+        colormap = plt.cm.nipy_spectral
+        colorcycle = cycler('color', [colormap(i) for i in np.linspace(0, 1, len(data))])
+        self.ax.set_prop_cycle(colorcycle)
+
+        for series in data:
+            if basis is not None:
+                series = series.align(basis)
+            p = self.ax.plot(series.t, series.mass, label=series.user)
+            self.glyphs.append(p[0])
+            self.labels.append(series.user)
+
+        # reduce width of plot by 20% to make space for legend
+        box = self.ax.get_position()
+        self.ax.set_position([box.x0, box.y0, box.width*.6, box.height])
+
+        self.ax.set_ylabel("Mass Change (Gt)")
+        self.ax.set_title(self._sheet_names[region])
+        self.fig.autofmt_xdate()
+
+        return "named_dm_" + region.value + "_" + group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.)

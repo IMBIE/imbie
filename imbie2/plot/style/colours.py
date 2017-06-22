@@ -1,10 +1,10 @@
 from imbie2.const.groups import Group
-
+from typing import Type, Dict, Any
 
 __all__ = ["primary", "secondary"]
 
 class ColorCollection:
-    def __init__(self, valdict=None, keytype=str, **values):
+    def __init__(self, valdict: Dict[Any, str]=None, keytype: Type=str, **values: str):
         if valdict is None:
             self._vals = {}
         else:
@@ -12,7 +12,7 @@ class ColorCollection:
         self._vals.update(values)
         self.keytype = keytype
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> str:
         if self.keytype is not None:
             if not isinstance(key, self.keytype):
                 try:
@@ -28,6 +28,7 @@ primary = ColorCollection(
      Group.iom: "#0000ff",
      Group.gia: "#ffff00",
      Group.smb: "#00ffff",
+     Group.la: "#ff00ff",
      Group.all: "#444444"},
     keytype=Group
 )
@@ -37,6 +38,7 @@ secondary = ColorCollection(
      Group.iom: "#8888ff",
      Group.gia: "#ffff88",
      Group.smb: "#88ffff",
+     Group.la: "#ff88ff",
      Group.all: "#888888"},
     keytype=Group
 )
