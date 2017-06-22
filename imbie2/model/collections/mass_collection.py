@@ -142,6 +142,11 @@ class MassChangeCollection(Collection):
     def filter(self, **kwargs) -> "MassChangeCollection":
         return super().filter(**kwargs)
 
+    def align(self, reference: MassChangeDataSeries) -> "MassChangeCollection":
+        return MassChangeCollection(
+            *[series.align(reference) for series in self]
+        )
+
     def __add__(self, other: "MassChangeCollection") -> "MassChangeCollection":
         return MassChangeCollection(*(self.series + other.series))
 

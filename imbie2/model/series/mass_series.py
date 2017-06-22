@@ -2,7 +2,7 @@ from .data_series import DataSeries
 import numpy as np
 
 from imbie2.util.functions import ts2m, match
-from imbie2.util.offset import apply_offset
+from imbie2.util.offset import apply_offset, align_against
 from imbie2.const.basins import BasinGroup, Basin
 import imbie2.model as model
 from typing import Optional
@@ -63,7 +63,8 @@ class MassChangeDataSeries(DataSeries):
         self.errs = self.errs[ok]
 
     @classmethod
-    def accumulate_mass(cls, rate_data, offset: float=None) -> "MassChangeDataSeries":
+    def accumulate_mass(cls, rate_data, offset: float=None, ref_series: "MassChangeDataSeries"=None)\
+            -> "MassChangeDataSeries":
         if isinstance(rate_data, model.series.MassRateDataSeries):
             t = (rate_data.t0 + rate_data.t1) / 2.
             dM = np.cumsum(rate_data.dmdt) / 12.
@@ -77,7 +78,11 @@ class MassChangeDataSeries(DataSeries):
         else: raise TypeError("Rates data expected")
 
         if offset is not None:
+            assert ref_series is None
+
             dM = apply_offset(t, dM, offset)
+        elif ref_series is not None:
+            dM = align_against(t, dM, ref_series.t, ref_series.mass)
 
         return cls(
             rate_data.user, rate_data.user_group, rate_data.data_group, rate_data.basin_group,
@@ -87,6 +92,14 @@ class MassChangeDataSeries(DataSeries):
 
     def differentiate(self) -> "model.series.MassRateDataSeries":
         return model.series.MassRateDataSeries.derive_rates(self).chunk_rates()
+
+    def align(self, reference: "MassChangeDataSeries") -> "MassChangeDataSeries":
+        mass = align_against(self.t, self.mass, reference.t, reference.mass)
+
+        return MassChangeDataSeries(
+            self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
+            self.t, self.a, mass, self.errs, self.computed, self.merged, self.aggregated, self.contributions
+        )
 
     def __len__(self) -> int:
         return len(self.t)
