@@ -67,7 +67,7 @@ class Table(PrettyTable):
 
         elif self._format == TableFormat.csv:
             # create header line
-            string = ",".join([field for field in self._get_field_names()]) + "\n"
+            string = ",".join([field.replace('\n', ' ') for field in self._get_field_names()]) + "\n"
 
             # iterate over rows of data
             for row in self:
@@ -98,7 +98,10 @@ class Table(PrettyTable):
         """
         self._primary_attr = attr
         self._primary_vals = values
-        self.add_column(name, values)
+        self.add_column(name, [self._format_primary(v) for v in values])
+
+    def _format_primary(self, value: Any) -> str:
+        return str(value)
 
     def _retreive_primary(self, data: Collection) -> Iterator[Collection]:
         """

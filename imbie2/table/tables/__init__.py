@@ -1,3 +1,5 @@
 from .basins_table import BasinsTable
 from .mean_errors_table import MeanErrorsTable
 from .time_coverage_table import TimeCoverageTable
+from .region_averages_table import RegionAveragesTable
+from .region_group_averages_table import RegionGroupAveragesTable

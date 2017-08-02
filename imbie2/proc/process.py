@@ -4,9 +4,11 @@ import os
 from imbie2.proc.sum_basins import sum_basins
 from imbie2.conf import ImbieConfig
 from imbie2.const.basins import IceSheet, BasinGroup
+from imbie2.const import AverageMethod
 from imbie2.model.collections import WorkingMassRateCollection, MassChangeCollection, MassRateCollection
 from imbie2.plot.plotter import Plotter
-from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable
+from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable, RegionAveragesTable,\
+                                RegionGroupAveragesTable
 
 
 def process(input_data: MassRateCollection, config: ImbieConfig):
@@ -68,7 +70,11 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
             new_series = rate_data.filter(
                 user_group=group, basin_id=sheet
-            ).average(mode=config.combine_method, nsigma=config.average_nsigma)
+            ).average(
+                mode=config.combine_method,
+                error_mode=config.group_avg_errors_method,
+                nsigma=config.average_nsigma
+            )
             if new_series is None:
                 continue
 
@@ -99,8 +105,11 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
 
         sheet_rate_avg = groups_sheets_rate.filter(
             basin_id=sheet
-        ).average(mode=config.combine_method, nsigma=config.average_nsigma,
-                  export_data=os.path.join(output_path, sheet.value+"_data.csv"))
+        ).average(
+            mode=config.combine_method,
+            error_mode=config.sheet_avg_errors_method,
+            nsigma=config.average_nsigma
+        )
         if sheet_rate_avg is None:
             continue
 
@@ -149,6 +158,24 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
     print("writing table:", filename)
     btr.write(filename)
 
+    rat = RegionAveragesTable(
+        regions_rate, list(regions.keys()),
+        (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010), (2010, 2017), (1992, 2017),
+        style=config.table_format
+    )
+    filename = os.path.join(output_path, "region_window_averages." + rat.default_extension())
+
+    print("writing table:", filename)
+    rat.write(filename)
+
+    rgt = RegionGroupAveragesTable(
+        groups_regions_rate, regions_rate, list(regions.keys()), 2005, 2015, groups, style=config.table_format
+    )
+    filename = os.path.join(output_path, "region_group_window_averages."+rgt.default_extension())
+
+    print("writing table:", filename)
+    rgt.write(filename)
+
     for group in groups:
         tct = TimeCoverageTable(rate_data.filter(user_group=group), style=config.table_format)
         filename = os.path.join(output_path, "time_coverage_" + group + "." + tct.default_extension())
@@ -193,13 +220,13 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
             mass_data.filter(user_group=group), regions, suffix=group,
             mark=config.users_mark, align=align_dm
         )
-        for region in regions:
+        for sheet in sheets:
             plotter.named_dmdt_group_plot(
-                region, group, rate_data.filter(user_group=group, basin_id=region)
+                sheet, group, rate_data.filter(user_group=group, basin_id=sheet)
             )
             plotter.named_dm_group_plot(
-                region, group, mass_data.filter(user_group=group, basin_id=region),
-                basis=groups_regions_mass.filter(user_group=group, basin_id=region).first()
+                sheet, group, mass_data.filter(user_group=group, basin_id=sheet),
+                basis=groups_regions_mass.filter(user_group=group, basin_id=sheet).first()
             )
     # intercomparisons
     for _id, region in regions.items():
