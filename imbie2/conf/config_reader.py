@@ -78,14 +78,31 @@ class ImbieConfig(ConfigFile):
     users_mark = ConfigParam("users_mark", str, multiple=True)
 
     combine_method = ConfigParam("combine_method", AverageMethod, default=AverageMethod.equal_groups)
-    align_date = ConfigParam("align_date", float, optional=True)
+    group_avg_errors_method = ConfigParam("group_avg_error_method", ErrorMethod, optional=True)
+    sheet_avg_errors_method = ConfigParam("sheet_avg_error_method", ErrorMethod, optional=True)
     sum_errors_method = ConfigParam("sum_errors_method", ErrorMethod, default=ErrorMethod.sum)
+
+    align_date = ConfigParam("align_date", float, optional=True)
     average_nsigma = ConfigParam("average_nsigma", float, optional=True)
     plot_smooth_window = ConfigParam("plot_smooth_window", float, optional=True)
-    # avg_errors_method = ConfigError("avg_errors_method", ErrorMethod, default=ErrorMethod.rms)
 
     export_data = ConfigParam("export_data", bool, default=False)
     include_la = ConfigParam("enable_la_group", bool, default=False)
 
     bar_plot_min_time = ConfigParam("bar_plot_min_time", float, optional=True)
     bar_plot_max_time = ConfigParam("bar_plot_max_time", float, optional=True)
+
+    def read(self, fileobj) -> None:
+        super().read(fileobj)
+
+        if self.group_avg_errors_method is None:
+            if self.combine_method == AverageMethod.imbie1_compat:
+                self.group_avg_errors_method = ErrorMethod.imbie1
+            else:
+                self.group_avg_errors_method = ErrorMethod.rms
+
+        if self.sheet_avg_errors_method is None:
+            if self.combine_method == AverageMethod.imbie1_compat:
+                self.sheet_avg_errors_method = ErrorMethod.imbie1
+            else:
+                self.sheet_avg_errors_method = ErrorMethod.rms

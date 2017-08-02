@@ -1,8 +1,9 @@
 from .functions import *
+from imbie2.const.error_methods import ErrorMethod
 
 
-def weighted_combine(t, y, w=None, nsigma=None, error=False, average=False,
-                     verbose=False, ret_data_out=False, imbie1_error_method=False):
+def weighted_combine(t, y, w=None, nsigma=None, average=False,
+                     verbose=False, ret_data_out=False, error_method: ErrorMethod=ErrorMethod.average):
     """
     Combines a number of input sequences
 
@@ -100,10 +101,10 @@ def weighted_combine(t, y, w=None, nsigma=None, error=False, average=False,
             plt.plot(t2, y2, colors[i]+'.')
         # add the values from the current input seq. to the output seq.
         try:
-            if error:
-                y1[m1] += (y2[m2] * w2[m2]) ** 2.
-            else:
+            if error_method == ErrorMethod.average or error_method == ErrorMethod.sum:
                 y1[m1] += (y2[m2] * w2[m2])
+            else:
+                y1[m1] += (y2[m2] * w2[m2]) ** 2.
         except IndexError:
             print(m1, m2)
             raise
@@ -115,14 +116,18 @@ def weighted_combine(t, y, w=None, nsigma=None, error=False, average=False,
     c11 = c1.copy()
     c11[c11 == 0] = 1.
     # use c1 to calculate the element-wise average of the data
-    if imbie1_error_method:
+    if error_method == ErrorMethod.imbie1:
         # NB: this error method is included for comparability with IMBIE 1 IDL method,
         #     but is not recommended for normal use
         y1 = np.sqrt(y1 / c11) / np.sqrt(c11)
-    elif error:
+    elif error_method == ErrorMethod.rms:
         y1 = np.sqrt(y1 / c11)
-    else:
+    elif error_method == ErrorMethod.rss:
+        y1 = np.sqrt(y1)
+    elif error_method == ErrorMethod.average:
         y1 /= c11
+    elif error_method != ErrorMethod.sum:
+        raise ValueError("unrecognised error method: {}".format(error_method))
 
     # find any locations where no values were found
     ok = (c1 == 0)

@@ -5,6 +5,7 @@ import math
 from imbie2.util.functions import match, smooth_imbie
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.const.basins import BasinGroup, Basin
+from imbie2.const.error_methods import ErrorMethod
 import imbie2.model as model
 
 from typing import Optional
@@ -157,7 +158,7 @@ class MassRateDataSeries(DataSeries):
                     np.asarray([self.errs[i], self.errs[i]])
                 )
             t, dmdt = ts_combine(time_chunks, dmdt_chunks)
-            _, errs = ts_combine(time_chunks, errs_chunks, error=True)
+            _, errs = ts_combine(time_chunks, errs_chunks, error_method=ErrorMethod.rms)
 
         return WorkingMassRateDataSeries(
             self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,

@@ -50,7 +50,7 @@ class WorkingMassRateCollection(Collection):
         return super().__iter__()
 
     def average(self, mode: AverageMethod=AverageMethod.equal_groups, nsigma: float=None,
-                export_data: str=None) -> WorkingMassRateDataSeries:
+                error_mode: ErrorMethod=None, export_data: str=None) -> WorkingMassRateDataSeries:
         if not self.series:
             return None
         elif len(self.series) == 1:
@@ -90,29 +90,9 @@ class WorkingMassRateCollection(Collection):
         else:
             raise ValueError("Unknown averaging mode: \"{}\"".format(mode))
 
-        if export_data is not None:
-            t, m, data_m = ts_combine(ts, ms, w=w, nsigma=nsigma, ret_data_out=True)
-            _, e, data_e = ts_combine(ts, es, error=True, nsigma=nsigma, ret_data_out=True)
+        t, m = ts_combine(ts, ms, w=w, nsigma=nsigma)
+        _, e = ts_combine(ts, es, nsigma=nsigma, error_method=error_mode)
 
-            with open(export_data, 'w') as f:
-                for i, ti in enumerate(t):
-                    line = [ti]
-                    for j in range(1, len(data_m)):
-                        dmdt_ij = data_m[j, i]
-                        stde_ij = data_e[j, i]
-                        line.extend([dmdt_ij, stde_ij])
-                    line.extend([m[i], e[i]])
-                    f.write(
-                        ", ".join(map(str, line)) + "\n"
-                    )
-            print(export_data)
-        # if mode == AverageMethod.imbie1_compat:
-        #     t, m = ts_combine(ts, ms, w=w, nsigma=nsigma)
-        #     _, e = ts_combine(ts, es, error=True, nsigma=nsigma,
-        #                       imbie1_error_method=True)
-        else:
-            t, m = ts_combine(ts, ms, w=w, nsigma=nsigma)
-            _, e = ts_combine(ts, es, error=True, nsigma=nsigma, imbie1_error_method=True)
         return WorkingMassRateDataSeries(
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e,
             contributions=count
@@ -145,33 +125,11 @@ class WorkingMassRateCollection(Collection):
 
         ts = [series.t for series in self]
         ms = [series.dmdt for series in self]
+        es = [series.errs for series in self]
 
-        if error_method == ErrorMethod.rms:
-            es = [series.errs for series in self]
-
-            _, e = ts_combine(ts, es, error=True)
-            t, m, o = sum_series(ts, ms, ret_mask=True)
-            e = e[o]
-        elif error_method == ErrorMethod.rss:
-            es = [np.square(series.errs) for series in self]
-
-            _, e = sum_series(ts, es)
-            t, m = sum_series(ts, ms)
-
-            e = np.sqrt(e)
-        elif error_method == ErrorMethod.sum:
-            es = [series.errs for series in self]
-
-            _, e = sum_series(ts, es)
-            t, m = sum_series(ts, ms)
-        elif error_method == ErrorMethod.imbie1:
-            es = [series.errs for series in self]
-
-            _, e = ts_combine(ts, es, error=True, imbie1_error_method=True)
-            t, m, o = sum_series(ts, ms, ret_mask=True)
-            e = e[o]
-        else:
-            raise ValueError("unknown error computation method: \"{}\"".format(error_method))
+        _, e = ts_combine(ts, es, error_method=error_method)
+        t, m, o = sum_series(ts, ms, ret_mask=True)
+        e = e[o]
 
         count = sum([series.contributions for series in self])
         return WorkingMassRateDataSeries(

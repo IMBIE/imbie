@@ -6,3 +6,4 @@ class ErrorMethod(Enum):
     rss = "rss"  # root sum squared
     sum = "sum"
     imbie1 = "imbie1" # RMS / sqrt(N)
+    average = "avg"
