@@ -97,14 +97,19 @@ def render_plot(method):
 
     return wrapped
 
+
 def render_plot_with_legend(method):
     @wraps(method)
-    def wrapped(obj, *args, **kwargs):
+    def wrapped(obj: "Plotter", *args, **kwargs):
         obj.clear_plot()
         obj.clear_legend()
         ret, leg = method(obj, *args, **kwargs)
-        obj.draw_legend(**leg)
-        obj.draw_plot(ret)
+        if leg.pop('extra', False):
+            leg = obj.draw_legend(**leg)
+            obj.draw_plot(ret, extra=(leg,))
+        else:
+            obj.draw_legend(**leg)
+            obj.draw_plot(ret)
 
     return wrapped
 
@@ -165,7 +170,7 @@ class Plotter:
         code = h * 100 + w * 10
         return w, h, code
 
-    def draw_plot(self, fname=None):
+    def draw_plot(self, fname=None, extra=None):
         if fname is None:
             return # self.clear_plot()
         elif self._ext is None:
@@ -176,7 +181,11 @@ class Plotter:
                 os.makedirs(self._path)
             fname = fname+'.'+self._ext
             fpath = os.path.join(self._path, fname)
-            plt.savefig(fpath, dpi=192)
+
+            if extra is None:
+                plt.savefig(fpath, dpi=192, bbox_inches='tight')
+            else:
+                plt.savefig(fpath, bbox_extra_artists=extra, dpi=192, bbox_inches='tight')
             self.ax.clear()
             self.fig.clear()
 
@@ -193,7 +202,7 @@ class Plotter:
             if legend_opts.pop('parent') == 'fig':
                 self.fig.legend(self.glyphs, self.labels, **legend_opts)
                 return
-        plt.legend(self.glyphs, self.labels, **legend_opts)
+        return plt.legend(self.glyphs, self.labels, **legend_opts)
 
     def clear_legend(self):
         self.glyphs = []
@@ -1065,7 +1074,7 @@ class Plotter:
         self.ax.set_title(self._sheet_names[region])
         self.fig.autofmt_xdate()
 
-        return "named_dmdt_"+region.value+"_"+group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+        return "named_dmdt_"+region.value+"_"+group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True)
 
     @render_plot_with_legend
     def named_dm_group_plot(self, region: IceSheet, group: str, data: MassChangeCollection,
@@ -1091,4 +1100,4 @@ class Plotter:
         self.ax.set_title(self._sheet_names[region])
         self.fig.autofmt_xdate()
 
-        return "named_dm_" + region.value + "_" + group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+        return "named_dm_" + region.value + "_" + group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True)
