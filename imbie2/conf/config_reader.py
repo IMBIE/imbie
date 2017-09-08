@@ -10,6 +10,7 @@ from imbie2.const.groups import Group
 from imbie2.const.average_methods import AverageMethod
 from imbie2.const.error_methods import ErrorMethod
 from imbie2.const.table_formats import TableFormat
+from imbie2.const.lsq_methods import LSQMethod
 
 
 class ConfigFile:
@@ -91,6 +92,12 @@ class ImbieConfig(ConfigFile):
 
     bar_plot_min_time = ConfigParam("bar_plot_min_time", float, optional=True)
     bar_plot_max_time = ConfigParam("bar_plot_max_time", float, optional=True)
+
+    # params from dm-to-dmdt conversion
+    use_dm = ConfigParam("use_dm", bool, default=False)
+    dmdt_window = ConfigParam("dmdt_window", float, default=1.)
+    dmdt_method = ConfigParam("dmdt_method", LSQMethod, default=LSQMethod.normal)
+    truncate_dmdt = ConfigParam("truncate_dmdt", bool, default=True)
 
     def read(self, fileobj) -> None:
         super().read(fileobj)

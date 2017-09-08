@@ -10,8 +10,10 @@ from imbie2.plot.plotter import Plotter
 from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable, RegionAveragesTable,\
                                 RegionGroupAveragesTable
 
+from typing import Union, Sequence
 
-def process(input_data: MassRateCollection, config: ImbieConfig):
+
+def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]], config: ImbieConfig):
 
     groups = ["RA", "GMB", "IOM"]
     if config.include_la:
@@ -30,8 +32,22 @@ def process(input_data: MassRateCollection, config: ImbieConfig):
     ])
     offset = config.align_date
 
-    # normalise dM/dt data
-    rate_data = input_data.chunk_series()
+    rate_data = WorkingMassRateCollection()
+    for collection in input_data:
+        if isinstance(collection, MassRateCollection):
+            # normalise dM/dt data
+            collection = collection.chunk_series()
+        elif isinstance(collection, MassChangeCollection):
+            collection = collection.to_dmdt(
+                truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method
+            )
+        for series in collection:
+            # check if there's already a series for this user & location
+            existing = rate_data.filter(
+                user_group=series.user_group, user=series.user, basin_id=series.basin_id, basin_group=series.basin_group
+            )
+            if not existing:
+                rate_data.add_series(series)
 
     # find users who have provided a full ice sheet of basin data, but no ice sheet series.
     sum_basins(rate_data, sheets)

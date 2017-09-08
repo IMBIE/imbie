@@ -104,6 +104,9 @@ def main():
         print(len(rate_mgr), "contributions read")
 
     # convert manager to collection
-    rate_col = rate_mgr.as_collection()
+    if config.use_dm:
+        data = [mass_mgr.as_collection(), rate_mgr.as_collection()]
+    else:
+        data = [rate_mgr.as_collection()]
     # process the data
-    process(rate_col, config)
+    process(data, config)

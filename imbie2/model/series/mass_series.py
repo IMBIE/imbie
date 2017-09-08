@@ -48,10 +48,10 @@ class MassChangeDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.mass = self.mass[ok]
-	# cropping the area has been removed as it was causing indexing
-	# errors. This isn't a currently a problem as the area isn't used
-	# in the analysis. TODO: find a proper solution to this
-        # self.a = self.a[ok]
+        # cropping the area has been removed as it was causing indexing
+        # errors. This isn't a currently a problem as the area isn't used
+        # in the analysis. TODO: find a proper solution to this
+            # self.a = self.a[ok]
         self.errs = self.errs[ok]
 
     def _set_max_time(self, max_t: float) -> None:

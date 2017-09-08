@@ -4,8 +4,10 @@ import math
 
 from imbie2.util.functions import match, smooth_imbie
 from imbie2.util.combine import weighted_combine as ts_combine
+from imbie2.util import dm_to_dmdt
 from imbie2.const.basins import BasinGroup, Basin
 from imbie2.const.error_methods import ErrorMethod
+from imbie2.const.lsq_methods import LSQMethod
 import imbie2.model as model
 
 from typing import Optional
@@ -252,6 +254,19 @@ class WorkingMassRateDataSeries(DataSeries):
         return cls(
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
             a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=aggr
+        )
+
+    @classmethod
+    def from_dm(cls, mass_series: "model.series.MassChangeDataSeries", truncate: bool=True, window: float=1.,
+                method: LSQMethod=LSQMethod.normal) -> "WorkingMassRateDataSeries":
+        dmdt, dmdt_err = dm_to_dmdt(
+            mass_series.t, mass_series.mass, mass_series.errs,
+            window, truncate=truncate, lsq_method=method
+        )
+
+        return cls(
+            mass_series.user, mass_series.user_group, mass_series.data_group, mass_series.basin_group,
+            mass_series.basin_id, mass_series.basin_area, mass_series.t, mass_series.a, dmdt, dmdt_err, computed=True
         )
 
     def smooth(self, window: float=13./12, clip=False) -> "WorkingMassRateDataSeries":

@@ -4,6 +4,7 @@ from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.util.sum_series import sum_series
 import imbie2.model as model
 from imbie2.const.error_methods import ErrorMethod
+from imbie2.const.lsq_methods import LSQMethod
 
 from typing import Iterator
 import numpy as np
@@ -137,6 +138,15 @@ class MassChangeCollection(Collection):
         out = model.collections.WorkingMassRateCollection()
         for series in self:
             out.add_series(series.differentiate())
+        return out
+
+    def to_dmdt(self, truncate: bool=True, window: float=1., method: LSQMethod=LSQMethod.normal) \
+            -> "model.collections.WorkingMassRateCollection":
+        out = model.collections.WorkingMassRateCollection()
+        for series in self:
+            out.add_series(
+                model.series.WorkingMassRateDataSeries.from_dm(series, truncate=truncate, window=window, method=method)
+            )
         return out
 
     def filter(self, **kwargs) -> "MassChangeCollection":
