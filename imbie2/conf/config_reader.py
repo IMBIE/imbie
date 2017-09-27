@@ -99,6 +99,8 @@ class ImbieConfig(ConfigFile):
     dmdt_method = ConfigParam("dmdt_method", LSQMethod, default=LSQMethod.normal)
     truncate_dmdt = ConfigParam("truncate_dmdt", bool, default=True)
 
+    reduce_window = ConfigParam("reduce_window", float, optional=True)
+
     def read(self, fileobj) -> None:
         super().read(fileobj)
 

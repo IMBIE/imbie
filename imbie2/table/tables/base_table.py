@@ -63,7 +63,7 @@ class Table(PrettyTable):
 
     def get_string(self, **kwargs) -> str:
         if self._format == TableFormat.html:
-            return self.get_html_string()
+            return self.get_html_string().encode('ascii', 'xmlcharrefreplace').decode('ascii')
 
         elif self._format == TableFormat.csv:
             # create header line

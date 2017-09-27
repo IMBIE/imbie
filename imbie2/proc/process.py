@@ -13,6 +13,17 @@ from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable,
 from typing import Union, Sequence
 
 
+def prepare_collection(collection: Union[MassRateCollection, MassChangeCollection], config: ImbieConfig):
+    if isinstance(collection, MassRateCollection):
+        # normalise dM/dt data
+        return collection.chunk_series()
+    elif isinstance(collection, MassChangeCollection):
+        return collection.to_dmdt(
+                truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method
+        )
+    else:
+        raise TypeError("Expected dM or dM/dt collection")
+
 def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]], config: ImbieConfig):
 
     groups = ["RA", "GMB", "IOM"]
@@ -34,13 +45,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
     rate_data = WorkingMassRateCollection()
     for collection in input_data:
-        if isinstance(collection, MassRateCollection):
-            # normalise dM/dt data
-            collection = collection.chunk_series()
-        elif isinstance(collection, MassChangeCollection):
-            collection = collection.to_dmdt(
-                truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method
-            )
+        collection = prepare_collection(collection, config)
         for series in collection:
             # check if there's already a series for this user & location
             existing = rate_data.filter(
@@ -48,6 +53,9 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
             )
             if not existing:
                 rate_data.add_series(series)
+
+    for series in rate_data.filter(user_group='RA'):
+        print(series.user, series.basin_id, series.t.max(), 'dM' if series.computed else 'dM/dt')
 
     # find users who have provided a full ice sheet of basin data, but no ice sheet series.
     sum_basins(rate_data, sheets)
@@ -79,6 +87,10 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         for series in data:
             for t, dmdt, e in zip(series.t, series.dmdt, series.errs):
                 print(outlier, series.basin_id, t, dmdt, e)
+
+    if config.reduce_window is not None:
+        assert config.reduce_window > 0
+        rate_data = rate_data.reduce(config.reduce_window)
 
     for group in groups:
         for sheet in sheets:
@@ -177,6 +189,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     rat = RegionAveragesTable(
         regions_rate, list(regions.keys()),
         (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010), (2010, 2017), (1992, 2017),
+        (1992, 1997), (1997, 2002), (2002, 2007), (2007, 2012), (2012, 2017),
         style=config.table_format
     )
     filename = os.path.join(output_path, "region_window_averages." + rat.default_extension())
@@ -205,6 +218,18 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         path=output_path,
         limits=True
     )
+    if len(input_data) == 2:
+        from functools import partial
+        prepare = partial(prepare_collection, config=config)
+        data_a, data_b = map(prepare, input_data)
+        for sheet in sheets:
+            for group in groups:
+                data_a_sel = data_a.filter(user_group=group, basin_id=sheet, user='Shepherd').window_cropped()
+                data_b_sel = data_b.filter(user_group=group, basin_id=sheet, user='Shepherd').window_cropped()
+
+                name = "%s_%s" % (group, sheet.value)
+                plotter.named_dmdt_comparison_plot(data_a_sel, data_b_sel, name)
+
     # rignot/zwally comparison
     for sheet in sheets:
         plotter.rignot_zwally_comparison(
@@ -213,10 +238,10 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     # error bars (IMBIE1 style plot)
     window = config.bar_plot_min_time, config.bar_plot_max_time
     plotter.sheets_error_bars(
-        groups_regions_rate, regions_rate, groups, regions, window=window
+        groups_regions_rate.window_cropped(), regions_rate, groups, regions, window=window
     )
     plotter.sheets_error_bars(
-        groups_regions_rate, regions_rate, groups, regions,
+        groups_regions_rate.window_cropped(), regions_rate, groups, regions,
         window=window, ylabels=True, suffix="labeled"
     )
 
@@ -227,8 +252,8 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
             rate_data.filter(user_group=group), {s: s for s in sheets}, suffix=group
         )
         plotter.group_rate_intracomparison(
-            groups_regions_rate.filter(user_group=group).smooth(config.plot_smooth_window),
-            rate_data.filter(user_group=group).smooth(config.plot_smooth_window),
+            groups_regions_rate.filter(user_group=group).window_cropped().smooth(config.plot_smooth_window),
+            rate_data.filter(user_group=group).window_cropped().smooth(config.plot_smooth_window),
             regions, suffix=group, mark=config.users_mark
         )
         plotter.group_mass_intracomparison(
@@ -238,7 +263,8 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         )
         for sheet in sheets:
             plotter.named_dmdt_group_plot(
-                sheet, group, rate_data.filter(user_group=group, basin_id=sheet)
+                sheet, group, rate_data.filter(user_group=group, basin_id=sheet).window_cropped(),
+                groups_regions_rate.filter(user_group=group, basin_id=sheet).window_cropped().first()
             )
             plotter.named_dm_group_plot(
                 sheet, group, mass_data.filter(user_group=group, basin_id=sheet),
@@ -249,7 +275,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         reg = {_id: region}
 
         plotter.groups_rate_intercomparison(
-            regions_rate.smooth(config.plot_smooth_window),
+            regions_rate.window_cropped().smooth(config.plot_smooth_window),
             groups_regions_rate.smooth(config.plot_smooth_window), reg
         )
         plotter.groups_mass_intercomparison(
@@ -259,6 +285,9 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     ais_regions = [IceSheet.eais, IceSheet.wais, IceSheet.apis]
     all_regions = [IceSheet.ais, IceSheet.gris, IceSheet.all]
 
+    plotter.regions_mass_intercomparison(
+        regions_mass, *sheets
+    )
     plotter.regions_mass_intercomparison(
         regions_mass, *ais_regions
     )

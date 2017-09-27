@@ -72,7 +72,7 @@ def main():
             continue
         fullname = user.forename + " " + user.lastname
 
-        for series in user.rate_data():
+        for series in user.rate_data(convert=False):
             if series is None:
                 continue
 

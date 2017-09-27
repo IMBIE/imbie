@@ -158,6 +158,18 @@ class WorkingMassRateCollection(Collection):
     def chunk_series(self):
         return self
 
+    def window_cropped(self) -> "WorkingMassRateCollection":
+        out = WorkingMassRateCollection()
+        for s in self:
+            out.add_series(s.get_truncated())
+        return out
+
+    def reduce(self, interval: float=1.):
+        out = WorkingMassRateCollection()
+        for s in self:
+            out.add_series(s.reduce(interval=interval))
+        return out
+
     def __add__(self, other: "WorkingMassRateCollection") -> "WorkingMassRateCollection":
         return WorkingMassRateCollection(*(self.series + other.series))
 

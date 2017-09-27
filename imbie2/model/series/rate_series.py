@@ -10,7 +10,7 @@ from imbie2.const.error_methods import ErrorMethod
 from imbie2.const.lsq_methods import LSQMethod
 import imbie2.model as model
 
-from typing import Optional
+from typing import Optional, Tuple
 
 
 class MassRateDataSeries(DataSeries):
@@ -52,7 +52,7 @@ class MassRateDataSeries(DataSeries):
         self.t1 = self.t1[ok]
         self.dmdt = self.dmdt[ok]
         self.errs = self.errs[ok]
-        self.a = self.a[ok]
+        # self.a = self.a[ok]
 
     def _set_max_time(self, max_t: float) -> None:
         ok = np.ones(self.t0.shape, dtype=bool)
@@ -67,7 +67,7 @@ class MassRateDataSeries(DataSeries):
         self.t1 = self.t1[ok]
         self.dmdt = self.dmdt[ok]
         self.errs = self.errs[ok]
-        self.a = self.a[ok]
+        # self.a = self.a[ok]
 
     def _get_min_time(self) -> float:
         return min(np.min(self.t1), np.min(self.t0))
@@ -175,7 +175,7 @@ class WorkingMassRateDataSeries(DataSeries):
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
                  dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False,
-                 contributions: int=1):
+                 contributions: int=1, truncate: Tuple[float, float]=None):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
             computed, merged, aggregated, contributions
@@ -184,6 +184,13 @@ class WorkingMassRateDataSeries(DataSeries):
         self.a = area
         self.dmdt = dmdt
         self.errs = errs
+        self.trunc_extent = truncate
+
+    def get_truncated(self) -> "WorkingMassRateDataSeries":
+        if self.trunc_extent is None:
+            return self
+        start, end = self.trunc_extent
+        return self.truncate(start, end)
 
     @property
     def min_rate(self) -> float:
@@ -216,8 +223,8 @@ class WorkingMassRateDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.dmdt = self.dmdt[ok]
-        if self.a is not None:
-            self.a = self.a[ok]
+        # if self.a is not None:
+        #     self.a = self.a[ok]
         self.errs = self.errs[ok]
 
     def _set_max_time(self, max_t: float) -> None:
@@ -225,12 +232,68 @@ class WorkingMassRateDataSeries(DataSeries):
 
         self.t = self.t[ok]
         self.dmdt = self.dmdt[ok]
-        if self.a is not None:
-            self.a = self.a[ok]
+        # if self.a is not None:
+        #     self.a = self.a[ok]
         self.errs = self.errs[ok]
 
     def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
         return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
+
+    def reduce(self, interval: float=1.) -> "WorkingMassRateDataSeries":
+
+        breaks = np.hstack(([0], np.argwhere(np.isnan(self.dmdt)).flat, [-1]))
+        all_windows_dmdt = []
+        all_windows_errs = []
+        all_windows_t = []
+
+        for start, final in zip(breaks[:-1], breaks[1:]):
+            if start + 1 == final:
+                continue
+
+            min_t = self.t[start]
+            max_t = self.t[final]
+
+            # min_t = self.t.min()
+            # max_t = self.t.max()
+            half_i = interval / 2.
+
+            t_new = np.arange(min_t+half_i, max_t-half_i, interval)
+            t_new = np.hstack((t_new, [max_t-half_i]))
+
+            n_points_out = len(t_new)
+            n_max_window = len(self)
+
+            window_dmdt = np.empty((n_points_out, n_max_window))
+            window_errs = np.empty((n_points_out, n_max_window))
+
+            for i, t in enumerate(t_new):
+                w_start = t-half_i
+                w_final = t+half_i
+
+                w_mask = np.logical_and(w_start <= self.t, self.t < w_final)
+                window_dmdt[i, :] = np.where(w_mask, self.dmdt, np.nan)
+                window_errs[i, :] = np.where(w_mask, self.errs, np.nan)
+            window_dmdt = np.hstack(
+                (np.nanmean(window_dmdt, axis=1), [np.nan])
+            )
+            window_errs = np.hstack(
+                (np.nanmean(window_errs, axis=1), [np.nan])
+            )
+            window_t = np.hstack(
+                (t_new, [max_t+half_i])
+            )
+            all_windows_dmdt.append(window_dmdt)
+            all_windows_errs.append(window_errs)
+            all_windows_t.append(window_t)
+
+        dmdt = np.hstack(all_windows_dmdt)
+        errs = np.hstack(all_windows_errs)
+        t_new = np.hstack(all_windows_t)
+
+        return WorkingMassRateDataSeries(
+            self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
+            t_new, self.a, dmdt, errs, aggregated=self.aggregated, computed=self.computed, truncate=self.trunc_extent
+        )
 
     @classmethod
     def merge(cls, a: "WorkingMassRateDataSeries", b: "WorkingMassRateDataSeries") -> "WorkingMassRateDataSeries":
@@ -263,10 +326,28 @@ class WorkingMassRateDataSeries(DataSeries):
             mass_series.t, mass_series.mass, mass_series.errs,
             window, truncate=truncate, lsq_method=method
         )
+        if truncate:
+            finite_indicies = np.flatnonzero(
+                np.isfinite(dmdt)
+            )
+
+            first_valid = finite_indicies.min()
+            final_valid = finite_indicies.max()
+
+            dmdt[:first_valid] = dmdt[first_valid]
+            dmdt[final_valid:] = dmdt[final_valid]
+
+            dmdt_err[:first_valid] = dmdt_err[first_valid]
+            dmdt_err[final_valid:] = dmdt_err[final_valid]
+
+            crop_to = mass_series.t[first_valid], mass_series.t[final_valid]
+        else:
+            crop_to = None
 
         return cls(
             mass_series.user, mass_series.user_group, mass_series.data_group, mass_series.basin_group,
-            mass_series.basin_id, mass_series.basin_area, mass_series.t, mass_series.a, dmdt, dmdt_err, computed=True
+            mass_series.basin_id, mass_series.basin_area, mass_series.t, mass_series.a, dmdt, dmdt_err,
+            computed=True, truncate=crop_to
         )
 
     def smooth(self, window: float=13./12, clip=False) -> "WorkingMassRateDataSeries":

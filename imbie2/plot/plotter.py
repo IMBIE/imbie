@@ -192,8 +192,8 @@ class Plotter:
             print("saving plot:", fpath)
 
     def clear_plot(self):
+        self.fig = plt.figure(figsize=(16, 9))
         self.ax = plt.gca()
-        self.fig = plt.gcf()
 
     def draw_legend(self, **legend_opts):
         if (not self.glyphs) or (not self.labels):
@@ -1017,8 +1017,8 @@ class Plotter:
 
     @render_plot_with_legend
     def regions_mass_intercomparison(self, region_avgs: MassChangeCollection, *regions: Sequence[IceSheet]) -> str:
-        pcols = cycle(["#531A59", "#1B8C6F", "#594508"])
-        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D"])
+        pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
+        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
 
         for region, pcol, scol in zip(regions, pcols, scols):
             avg = region_avgs.filter(basin_id=region).average()
@@ -1054,12 +1054,22 @@ class Plotter:
         return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}
 
     @render_plot_with_legend
-    def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection):
+    def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection, avg: WorkingMassRateDataSeries=None):
         data = data.filter(user_group=group, basin_id=region)
 
         colormap = plt.cm.nipy_spectral
         colorcycle = cycler('color', [colormap(i) for i in np.linspace(0, 1, len(data))])
         self.ax.set_prop_cycle(colorcycle)
+
+        if avg is not None:
+            p = self.ax.plot(avg.t, avg.dmdt, ls='--', label='Average')
+            self.glyphs.append(p[0])
+            self.labels.append('Average')
+
+            self.ax.fill_between(
+                avg.t, avg.dmdt - avg.errs, avg.dmdt + avg.errs,
+                color=p[0].get_color(), alpha=.5
+            )
 
         for series in data:
             p = self.ax.plot(series.t, series.dmdt, label=series.user)
@@ -1101,3 +1111,52 @@ class Plotter:
         self.fig.autofmt_xdate()
 
         return "named_dm_" + region.value + "_" + group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True)
+
+    @render_plot_with_legend
+    def named_dmdt_comparison_plot(self, data_a: WorkingMassRateCollection, data_b: WorkingMassRateCollection, suffix: str):
+        pairs = []
+        for series_a in data_a:
+            series_b = data_b.filter(
+                user=series_a.user, user_group=series_a.user_group,
+                basin_id=series_a.basin_id, basin_group=series_a.basin_group
+            ).first()
+
+            if series_b is not None:
+                pairs.append((series_a, series_b))
+
+        if not pairs:
+            return "", {}
+
+
+        # colormap = plt.cm.nipy_spectral
+        # colorcycle = (colormap(i) for i in np.linspace(0, 1, len(pairs)))
+        #
+        # size = int(np.sqrt(len(pairs)) + 1)
+        # fig, axes = plt.subplots(size, size, True, True)
+
+        # for color, (series_a, series_b), ax in zip(colorcycle, pairs, axes.flat):
+        for series_a, series_b in pairs:
+            ax = self.ax
+
+            ax.plot(series_a.t, series_a.dmdt, color='r')
+            ax.fill_between(
+                series_a.t, series_a.dmdt-series_a.errs, series_a.dmdt+series_a.errs, color='r', alpha=.5
+            )
+            ax.plot(series_b.t, series_b.dmdt, color='g')
+            ax.fill_between(
+                series_b.t, series_b.dmdt-series_b.errs, series_b.dmdt+series_b.errs, color='g', alpha=.5
+            )
+
+            self.glyphs += [self.colour_glyph('r'), self.colour_glyph('g')]
+            self.labels += ['from dM', 'from dM/dt']
+
+        # reduce width of plot by 20% to make space for legend
+        box = self.ax.get_position()
+        self.ax.set_position([box.x0, box.y0, box.width * .6, box.height])
+
+        self.ax.set_ylabel("Rate of Mass Change (Gt/yr)")
+        self.ax.set_title("dM/dt Comparison: %s" % suffix)
+        self.fig.autofmt_xdate()
+
+        return "named_dmdt_comparison_" + suffix, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.,
+                                                                extra=True)

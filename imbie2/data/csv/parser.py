@@ -71,7 +71,7 @@ class FileParser(metaclass=ABCMeta):
             return self
         except Exception as e:  # (FileParserError, ParsingError):
             logging.error(
-                "Failed to open file: {}".format(self.filename)
+                "Failed to open file: {}\n{}".format(self.filename, e)
             )
             return None
 
