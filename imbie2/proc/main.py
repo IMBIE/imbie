@@ -96,11 +96,11 @@ def main():
 
     print("done.")
 
-    if not rate_mgr:
+    if not rate_mgr and not mass_mgr:
         print("no data in input directory")
         return ErrorCode.no_data.value
     else:
-        print(len(rate_mgr), "contributions read")
+        print(len(rate_mgr)+len(mass_mgr), "contributions read")
 
     # convert manager to collection
     if config.use_dm:
