@@ -1,17 +1,28 @@
 from collections import OrderedDict
+from itertools import product
 import os
+import shutil
+from typing import Union, Sequence
+from matplotlib.pyplot import cm
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 
 from imbie2.proc.sum_basins import sum_basins
 from imbie2.conf import ImbieConfig
 from imbie2.const.basins import IceSheet, BasinGroup
-from imbie2.const import AverageMethod
-from imbie2.model.collections import WorkingMassRateCollection, MassChangeCollection, MassRateCollection
+from imbie2.const.error_methods import ErrorMethod
+from imbie2.model.collections import WorkingMassRateCollection, MassChangeCollection, \
+                                     MassRateCollection
 from imbie2.plot.plotter import Plotter
-from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable, RegionAveragesTable,\
-                                RegionGroupAveragesTable
-
-from typing import Union, Sequence
-
+from imbie2.plot import style
+from imbie2.table.tables import MeanErrorsTable, TimeCoverageTable, BasinsTable, \
+                                RegionAveragesTable, RegionGroupAveragesTable
+from imbie2.proc.compare_windows import compare_windows
+from imbie2.util.count_tolerance import count_tolerance
+from imbie2.util.functions import ts2m, match, move_av
+from imbie2.util.discharge import calculate_discharge
+from imbie2.model.series import WorkingMassRateDataSeries, MassChangeDataSeries
 
 def prepare_collection(collection: Union[MassRateCollection, MassChangeCollection], config: ImbieConfig):
     if isinstance(collection, MassRateCollection):
@@ -31,6 +42,20 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         groups.append("LA")
     for g in config.methods_skip:
         groups.remove(g)
+
+    # find output directory
+    output_path = os.path.expanduser(config.output_path)
+
+    # check if it exists, clear it if not empty (or abort)
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    if os.listdir(output_path):
+        msg = "WARNING: directory \"%s\" is not empty, contents will be deleted. Proceed? (Y/n): " % output_path
+        choice = input(msg)
+        if (not choice.lower() == 'y') and choice:
+            print("Processor cancelled by user.")
+            return
+        shutil.rmtree(output_path)
 
     sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris]
     regions = OrderedDict([
