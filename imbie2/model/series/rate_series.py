@@ -428,25 +428,34 @@ class WorkingMassRateDataSeries(DataSeries):
     @classmethod
     def from_dm(cls, mass_series: "model.series.MassChangeDataSeries", truncate: bool=True, window: float=1.,
                 method: LSQMethod=LSQMethod.normal) -> "WorkingMassRateDataSeries":
-        dmdt, dmdt_err = dm_to_dmdt(
-            mass_series.t, mass_series.mass, mass_series.errs,
-            window, truncate=truncate, lsq_method=method
-        )
+        try:
+            dmdt, dmdt_err = dm_to_dmdt(
+                mass_series.t, mass_series.mass, mass_series.errs,
+                window, truncate=truncate, lsq_method=method
+            )
+        except:
+            dmdt = np.ones_like(mass_series.t) * np.nan
+            dmdt_err = np.ones_like(mass_series.t) * np.nan
+            print("ERROR:", mass_series.user, mass_series.basin_id.value)
         if truncate:
             finite_indicies = np.flatnonzero(
                 np.isfinite(dmdt)
             )
+            if not finite_indicies.size:
+                crop_to = None
 
-            first_valid = finite_indicies.min()
-            final_valid = finite_indicies.max()
+            else:
 
-            dmdt[:first_valid] = dmdt[first_valid]
-            dmdt[final_valid:] = dmdt[final_valid]
+                first_valid = finite_indicies.min()
+                final_valid = finite_indicies.max()
 
-            dmdt_err[:first_valid] = dmdt_err[first_valid]
-            dmdt_err[final_valid:] = dmdt_err[final_valid]
+                dmdt[:first_valid] = dmdt[first_valid]
+                dmdt[final_valid:] = dmdt[final_valid]
 
-            crop_to = mass_series.t[first_valid], mass_series.t[final_valid]
+                dmdt_err[:first_valid] = dmdt_err[first_valid]
+                dmdt_err[final_valid:] = dmdt_err[final_valid]
+
+                crop_to = mass_series.t[first_valid], mass_series.t[final_valid]
         else:
             crop_to = None
 
