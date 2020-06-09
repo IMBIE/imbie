@@ -70,7 +70,7 @@ class FileParser(metaclass=ABCMeta):
             self.open()
             return self
         except Exception as e:  # (FileParserError, ParsingError):
-            logging.error(
+            self.logger.error(
                 "Failed to open file: {}\n{}".format(self.filename, e)
             )
             return None
@@ -99,20 +99,19 @@ class FileParser(metaclass=ABCMeta):
         except ValueError:
             grp = None
 
-        if IceSheet.is_valid(basin_id.lower()):
-            _id = IceSheet.get_basin(basin_id.lower())
-            if grp is None: grp = BasinGroup.sheets
-        elif grp == BasinGroup.zwally:
-            _id = ZwallyBasin.parse(basin_id)
-        elif grp == BasinGroup.rignot:
-            _id = RignotBasin.parse(basin_id)
-        else:
-            e = "{}: invalid basin on line {} ({}: {})".format(
-                self.filename, lnum, basin_grp, basin_id)
-            self.logger.warn(e)
-            # warnings.warn(
-            #     ParsingWarning(self, "invalid basin definition", lnum, e)
-            # )
+        try:
+            if IceSheet.is_valid(basin_id.lower()):
+                _id = IceSheet.get_basin(basin_id.lower())
+                if grp is None: grp = BasinGroup.sheets
+            elif grp == BasinGroup.zwally:
+                _id = ZwallyBasin.parse(basin_id)
+            elif grp == BasinGroup.rignot:
+                _id = RignotBasin.parse(basin_id)
+            else:
+                raise ValueError()
+        except:
+            basin_def = "{}/ {}".format(basin_grp, basin_id)
+            warnings.warn( ParsingWarning(self, "Invalid basin definition", lnum, basin_def) )
             return None, None
         return grp, _id
 
@@ -121,7 +120,6 @@ class FileParser(metaclass=ABCMeta):
             if not line: # empty line
                 continue
             if line[0].lower() == 'experiment group': # header line
-                self.logger.debug(line)
                 continue
             if line[0][0] == '#': # comment
                 continue
@@ -130,18 +128,42 @@ class FileParser(metaclass=ABCMeta):
             line = [item.strip() for item in line if item]
 
             if len(line) < columns:
-                msg = "{}: missing columns (expected {}, got {})".format(
-                    self.filename, columns, len(line)
+                msg = "missing columns (expected {}, got {})".format(
+                    columns, len(line)
                 )
-                line = '\n' + ", ".join(line)
-                self.logger.error(msg + line)
+                warnings.warn( ParsingWarning(self, msg, lnum, line) )
                 continue
 
             yield lnum, line
 
     @abstractmethod
-    def parse_file(self):
+    def _parse_file(self):
         pass
+
+    def parse_file(self, verbose: bool=False):
+        # with warnings.catch_warnings():
+        warnings.simplefilter("once", ParsingWarning)
+        
+        seen = {}
+
+        def log_warning(message, category, filename, lineno, file=None):
+            """
+            write warnings to logging module, checking if they have already
+            been found (and supressing those that have)
+
+            this should be the default behaviour of the warnings library but
+            for some reason it isn't working correctly.
+            """
+            if filename not in seen:
+                seen[filename] = set()
+            if lineno not in seen[filename]:
+                logging.warning(
+                    '\n%s:%s:\n%s:%s' % 
+                    (filename, lineno, category.__name__, message)
+                )
+            seen[filename].add(lineno)
+        warnings.showwarning = log_warning
+        self._parse_file()
 
 
 class MassChangeParser(FileParser):
@@ -206,7 +228,7 @@ class MassChangeParser(FileParser):
                 errs=errs[i]
             )
 
-    def parse_file(self):
+    def _parse_file(self):
         """
         reads the data from the file
         """
@@ -231,8 +253,7 @@ class MassChangeParser(FileParser):
                 err = float(line[8])
 
             except ValueError as e:
-                self.logger.warn(e)
-                # warnings.warn(ParsingWarning(self, "error parsing value", lnum, e))
+                warnings.warn( ParsingWarning(self, "error parsing value", lnum, e) )
                 continue
 
             if (basin_id, basin_grp) in collections:
@@ -324,7 +345,7 @@ class MassRateParser(FileParser):
                 errs=errs[i]
             )
 
-    def parse_file(self):
+    def _parse_file(self):
         """
         reads the data from the file
         """
@@ -351,8 +372,7 @@ class MassRateParser(FileParser):
                 err = float(line[9])
 
             except ValueError as e:
-                self.logger.warn(e)
-                # warnings.warn(ParsingWarning(self, "error parsing value", lnum, e))
+                warnings.warn( ParsingWarning(self, "error parsing value", lnum, e) )
                 continue
 
             if (basin_id, basin_grp) in collections:
@@ -402,34 +422,3 @@ class IOMRatesParser(MassChangeParser):
                 rate=rate[i],
                 errs=errs[i]
             )
-
-
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-
-    while True:
-        try:
-            fname = input()
-        except EOFError:
-            break
-
-        if not fname: break
-        if fname[0] == '#': continue
-
-        print(fname)
-        with MassChangeParser(fname) as data:
-            for basin in data:
-                plt.fill_between(
-                    basin.t,
-                    basin.mass-basin.errs,
-                    basin.mass+basin.errs,
-                    alpha=0.5
-                )
-                plt.plot(basin.t, basin.mass, 'b-')
-                plt.grid()
-
-                plt.title(basin.basin_id.value)
-                plt.xlabel("year")
-                plt.ylabel("mass change (Gt)")
-
-                plt.show()
