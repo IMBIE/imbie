@@ -130,6 +130,9 @@ def interpol(x, y, xnew, mode="linear"):
         ynew = s(xnew)
     elif mode == "linear":
         ynew = np.interp(xnew, x, y)
+    elif mode == "nearest":
+        s = interpolate.interp1d(x, y, kind='nearest', fill_value="extrapolate")
+        ynew = s(xnew)
     else:
         raise ValueError("Unrecognised interpolation mode")
 
@@ -177,7 +180,7 @@ def ts2m(x, y):
     x0 = math.floor(np.min(x) * 12) / 12.
     x1 = math.ceil(np.max(x) * 12) / 12.
     xnew = np.arange((x1 - x0)*12, dtype=x.dtype) / 12. + x0
-    ynew = interpol(x, y, xnew)
+    ynew = interpol(x, y, xnew, mode='nearest') # FIXME: maybe undo this
     return xnew, ynew
 
 
