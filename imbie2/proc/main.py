@@ -28,7 +28,10 @@ def main():
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('config', type=str, help="Path to an IMBIE configuration file")
-    cfg_path = parser.parse_args().config
+    parser.add_argument('-v', '--verbose', action="store_true", help="Show detailed warnings")
+
+    args = parser.parse_args()
+    cfg_path = args.config
 
     print("IMBIE processor v{}".format(__version__))
 
@@ -49,7 +52,8 @@ def main():
     print("done.")
 
     # set logging level (todo: add this to config?)
-    logging.basicConfig(level=logging.CRITICAL)
+    level = logging.WARNING if args.verbose else logging.CRITICAL
+    logging.basicConfig(level=level)
 
     # create empty dM/dt and dM managers
     rate_mgr = MassRateCollectionsManager(config.start_date, config.stop_date)
@@ -81,9 +85,6 @@ def main():
             names.add(series.user)
             fullnames.add(fullname)
 
-            line = ", ".join(str(s) for s in [fullname, series.user, series.basin_group, series.basin_id]) + "\n"
-            logging.info(line)
-
         for series in user.mass_data(convert=False):
             if series is None:
                 continue
@@ -93,8 +94,6 @@ def main():
             names.add(series.user)
             fullnames.add(fullname)
 
-        if not sheets:
-            continue
     print("done.")
 
     if not rate_mgr:
