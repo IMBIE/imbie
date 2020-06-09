@@ -1,16 +1,21 @@
 import matplotlib.pyplot as plt
 from matplotlib import lines as mlines
 from matplotlib import patches as mpatches
+from matplotlib.ticker import MultipleLocator
+import matplotlib as mpl
 import numpy as np
+import pandas as pd
 import math
 import os
+import importlib
+import inspect
 from typing import Sequence, Tuple
 
 from . import plots
 from . import style
 
 from functools import wraps
-from itertools import cycle
+from itertools import cycle, product
 from cycler import cycler
 from collections import OrderedDict
 
@@ -21,6 +26,7 @@ from imbie2.util.functions import ts2m, move_av, match, t2m
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.model.managers import MassChangeCollectionsManager, MassRateCollectionsManager
 from imbie2.model.series import *
+from imbie2.proc.compare_windows import WindowStats
 
 
 def chunk_rates(series):
@@ -117,11 +123,14 @@ def render_plot_with_legend(method):
 class Plotter:
     _time0 = 1990
     _time1 = 2020
-    _dmdt0 = -900
-    _dmdt1 = 300
+    _dmdt0 = -500 # -900
+    _dmdt1 = 200 # 300
     _dm0 = -9000
     _dm1 = 3000
-    _set_limits = False
+    _set_limits = True
+
+    _imbie1_ylim_dmdt = -450, 300
+    _imbie1_ylim_dm = -5000, 1000
 
     _sheet_names = {
         IceSheet.wais: "West Antarctica",
@@ -134,7 +143,7 @@ class Plotter:
     _group_names = {
         "RA": "Altimetry",
         "GMB": "Gravimetry",
-        "IOM": "Mass Budget",
+        "IOM": "Input-Output Method", # "Mass Budget",
         "LA": "Laser Altimetry",
         "all": "All"
     }
@@ -147,6 +156,14 @@ class Plotter:
 
         if limits is not None:
             self._set_limits = limits
+
+        mpl.rc('lines', linewidth=2)
+        mpl.rc('font', size=22)
+        mpl.rc('axes', linewidth=2)
+        mpl.rc('xtick.major', width=1, size=5)
+        mpl.rc('xtick.minor', width=1, size=3)
+        mpl.rc('ytick.major', width=1, size=5)
+        mpl.rc('ytick.minor', width=1, size=3)
 
     def _get_subplot_shape(self, count: int) -> Tuple[int, int, int]:
         if count == 1:
@@ -172,7 +189,8 @@ class Plotter:
 
     def draw_plot(self, fname=None, extra=None):
         if fname is None:
-            return # self.clear_plot()
+            plt.close(self.fig)
+            return
         elif self._ext is None:
             plt.show()
         else:
@@ -190,9 +208,14 @@ class Plotter:
             self.fig.clear()
 
             print("saving plot:", fpath)
+        
+        mpl.rc('lines', linewidth=2)
+        mpl.rc('font', size=22)
 
     def clear_plot(self):
-        self.fig = plt.figure(figsize=(16, 9))
+        if hasattr(self, 'fig'):
+            plt.close(self.fig)
+        self.fig = plt.figure(figsize=(9, 16))
         self.ax = plt.gca()
 
     def draw_legend(self, **legend_opts):
@@ -218,8 +241,8 @@ class Plotter:
         return Plotter.colour_glyph(colour, label=group)
 
     @staticmethod
-    def colour_glyph(colour, label=None):
-        return mpatches.Patch(color=colour, label=label)
+    def colour_glyph(colour, label=None, **kwargs):
+        return mpatches.Patch(color=colour, label=label, **kwargs)
 
     @render_plot_with_legend
     def sheets_time_bars(self, data, sheets, names, *groups):
