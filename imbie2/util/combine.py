@@ -27,7 +27,7 @@ def weighted_combine(t, y, w=None, nsigma=None, average=False,
     if len(t) == 1:
         return np.asarray(t[0]), np.asarray(y[0])
 
-    colors = ['r', 'g', 'b', 'c', 'y', 'm', 'o', 'k']
+    colors = ['r', 'g', 'b', 'c', 'y', 'm', 'k']
     if w is None:
         w = [1 for _ in t]
     for i, wi in enumerate(w):
@@ -39,7 +39,7 @@ def weighted_combine(t, y, w=None, nsigma=None, average=False,
 
     if verbose:
         for ti, yi, c in zip(t, y, colors[1:]):
-            plt.plot(ti, yi, c+'-')
+            p = plt.plot(ti, yi, '-')
     # create _id array, which indicates which input array each element originated from
     _id = [np.ones(ti.shape, dtype=int)*(i+1) for i, ti in enumerate(t)]
     _id = np.concatenate(_id)
@@ -98,7 +98,7 @@ def weighted_combine(t, y, w=None, nsigma=None, average=False,
         # match,fix(t1*12),fix(t2*12),m1,m2
         # print repr(y1), repr(y2), repr(m1), repr(m2)
         if verbose:
-            plt.plot(t2, y2, colors[i]+'.')
+            plt.plot(t2, y2, '.', color=p[0].get_color())
         # add the values from the current input seq. to the output seq.
         try:
             if error_method == ErrorMethod.average or error_method == ErrorMethod.sum:
