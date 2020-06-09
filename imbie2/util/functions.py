@@ -325,9 +325,11 @@ def move_av(dx, x, y=None, clip=False):
         return ret[dx - 1:] / dx
 
 
-def smooth_imbie(x, y, width=43):
+def smooth_imbie(x, y, width=43, iters=1):
     """essentially an alias for move_av, with a default window width."""
-    return move_av(width, x, y)
+    for n in range(iters):
+        y = move_av(width, x, y)
+    return y
 
 
 def rmsd(a, b):
