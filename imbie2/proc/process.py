@@ -74,6 +74,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         shutil.rmtree(output_path)
 
     sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris]
+    ais_sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
     regions = OrderedDict([
         (IceSheet.eais, [IceSheet.eais]),
         (IceSheet.apis, [IceSheet.apis]),
@@ -83,6 +84,51 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         (IceSheet.all, [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris])
     ])
     offset = config.align_date
+
+    names_ra = [
+        'Gardner/Nilsson', 'Gourmelen', 'Gunter', 'Helm', 'McMillan'
+    ]
+    names_la = [
+        'Gunter', 'Helm', 'Pie', 'Sandberg Sorensen'
+    ]
+
+    for group in groups:
+        for sheet in sheets:
+            print(group, sheet)
+
+            num_epochs = 0
+            sum_resolution = 0
+
+            for col in input_data:
+                col_local = col.filter(
+                    user_group=group,
+                    basin_id=sheet
+                )
+
+                col_epochs = sum(len(s) for s in col_local)
+                sum_resolution = col_local.mean_temporal_resolution() * col_epochs
+                num_epochs += col_epochs
+
+            temp_res = sum_resolution / num_epochs
+
+            print('mean temporal resolution %s/%s:' % (sheet, group), temp_res)
+
+    num_epochs = 0
+    sum_resolution = 0
+    temp_res_each = []
+
+    for col in input_data:
+        ra_col = col.filter(
+            user_group='RA',
+            user=names_ra,
+            basin_id=IceSheet.gris
+        )
+
+        temp_res_each += [c.temporal_resolution() for c in ra_col]
+    
+    print('Greenland RA users min. temporal resolution:', min(temp_res_each))
+    print('Greenland RA users max. temporal resolution:', max(temp_res_each))
+                
 
     rate_data = WorkingMassRateCollection()
     rate_data_unsmoothed = WorkingMassRateCollection()
@@ -148,8 +194,100 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         rate_data_unsmoothed =\
             rate_data_unsmoothed.reduce(config.reduce_window, centre=.495, backfill=False) #  centre=.5,
 
+    names = {series.user for series in rate_data}
+
+    print("writing per-user data", end="... ")
+    dmdt_users = set()
+    dm_users = set()
+    single_point = 0
+
+    for name in names:
+        for input_set in input_data:
+            if len(input_set.filter(user=name, basin_id=sheets)) == 0:
+                continue
+            if isinstance(input_set, MassChangeCollection):
+                dm_users.add(name)
+            else:
+                dmdt_users.add(name)
+                single_only = True
+                for series in input_set.filter(user=name):
+                    if len(series) > 1:
+                        single_only = False
+                        break
+                if single_only:
+                    single_point += 1
+
+
+    dmdt_only = 0
+    dm_only = 0
+    both = 0
+    for name in names:
+        if name in dmdt_users and name in dm_users:
+            both += 1
+        elif name in dmdt_users:
+            dmdt_only += 1
+        elif name in dm_users:
+            dm_only += 1
+    print("dm/dt only:", dmdt_only)
+    print("   dm only:", dm_only)
+    print("      both:", both)
+    print("1-len dmdt:", single_point)
+
+    for name in names:
+        for series in rate_data.filter(user=name):
+
+            subfolder = " "
+            if series.computed:
+                subfolder = "dmdt/from_dm/"
+            else:
+                subfolder = "dmdt/from_dmdt/"
+
+            output_dir = os.path.join(output_path, subfolder)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            fname = os.path.join(output_dir, name.replace("/", "_") + ".csv")
+
+            with open(fname, 'a') as f:
+                for line in zip(series.t, series.dmdt, series.errs):
+                    line = series.user_group + ", " + name + ", " + series.basin_id.value + ", " +\
+                            series.basin_group.name + ", " + ", ".join(map(str, line)) + "\n"
+                    f.write(line)
+    print("done.")
+
+
     for group in groups:
         for sheet in sheets:
+            col = rate_data.filter(
+                user_group=group, basin_id=sheet
+            )
+            
+            min_time = col.min_rate_time()
+            max_time = col.max_rate_time()
+            print('min. dM/dt %s/%s:' % (sheet, group), col.min_rate(), '(Gt/yr), @', min_time)
+            print('max. dM/dt %s/%s:' % (sheet, group), col.max_rate(), '(Gt/yr), @', max_time)
+
+            minmax_beg = int(min(min_time, max_time))
+            minmax_end = int(max(min_time, max_time) + 1)
+
+            col_min_max = WorkingMassRateCollection(
+                *[s.truncate(minmax_beg, minmax_end) for s in col]
+            )
+            print('standard deviation in min-max period:', col_min_max.stdev())
+
+            others = [g for g in groups if g != group]
+
+            xgroup_min_max = WorkingMassRateCollection(
+                *[s.truncate(minmax_beg, minmax_end) for s in rate_data.filter(basin_id=sheet, user_group=others)]
+            )
+            print('min. dM/dt of all groups %s in period %i-%i' % (sheet, xgroup_min_max.min_time(), xgroup_min_max.max_time()), xgroup_min_max.min_rate(), '(Gt/yr), @', xgroup_min_max.min_rate_time())
+            print('max. dM/dt of all groups %s in period %i-%i' % (sheet, xgroup_min_max.min_time(), xgroup_min_max.max_time()), xgroup_min_max.max_rate(), '(Gt/yr), @', xgroup_min_max.max_rate_time())
+
+            if group == 'RA':
+                la_col = col.filter(user=names_la)
+                print('LA-only min. dM/dt %s/%s:' % (sheet, group), la_col.min_rate(), '(Gt/yr), @', la_col.min_rate_time())
+                print('LA-only max. dM/dt %s/%s:' % (sheet, group), la_col.max_rate(), '(Gt/yr), @', la_col.max_rate_time())
+
+
             print("computing", group, "average for", sheet.value, end="... ")
 
             new_series = rate_data.filter(
@@ -774,6 +912,32 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
         print("writing table:", filename)
         tct.write(filename)
+
+    # import pandas as pd
+    # import numpy as np
+    # from imbie2.util.functions import match, ts2m
+    # import matplotlib.pyplot as plt
+
+    # for group in groups:
+    #     for sheet in ais_sheets:
+    #         data = rate_data.filter(user_group=group, basin_id=sheet)
+    #         mean = groups_regions_rate.filter(user_group=group, basin_id=sheet).first()
+    #         diffs = []
+
+    #         for series in data:
+    #             t, dmdt = ts2m(series.t, series.dmdt)
+    #             m1, m2 = match(t, mean.t, epsilon=1e-5)
+    #             t = mean.t[m2]
+
+    #             diff = np.abs(dmdt[m1] - mean.dmdt[m2])
+    #             diffs.append(
+    #                 pd.Series(diff, index=t, name=series.user)
+    #             )
+
+    #         d = {s.name: s for s in diffs}
+    #         frame = pd.DataFrame(d)
+
+    #         frame.to_csv('{}_{}_mean_difference.csv'.format(sheet.value, group))
 
     # draw plots
     plotter = Plotter(
