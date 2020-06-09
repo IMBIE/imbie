@@ -1,10 +1,10 @@
-from imbie2.model.collections import WorkingMassRateCollection
+from imbie2.model.collections.collection import Collection
 from imbie2.const.error_methods import ErrorMethod
 from imbie2.const.basins import BasinGroup, ZwallyBasin, RignotBasin, IceSheet
 from typing import Iterable
 
 
-def sum_basins(rate_data: WorkingMassRateCollection, sheets: Iterable[IceSheet]=None) -> None:
+def sum_basins(data: Collection, sheets: Iterable[IceSheet]=None) -> None:
     """
     given a WorkingMassRateCollection, finds users in the collection
     who have submitted a complete set of per-basin series for an ice sheet,
@@ -17,9 +17,9 @@ def sum_basins(rate_data: WorkingMassRateCollection, sheets: Iterable[IceSheet]=
     if sheets is None:
         sheets = [IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.gris]
 
-    users = list({s.user for s in rate_data})
+    users = list({s.user for s in data})
     for user in users:
-        user_data = rate_data.filter(user=user)
+        user_data = data.filter(user=user)
         for group, basin_set in zip([BasinGroup.zwally, BasinGroup.rignot], [ZwallyBasin, RignotBasin]):
             for sheet in sheets:
                 basins = list(basin_set.sheet(sheet))
@@ -36,4 +36,4 @@ def sum_basins(rate_data: WorkingMassRateCollection, sheets: Iterable[IceSheet]=
                     series.user = user
                     series.aggregated = True
 
-                    rate_data.add_series(series)
+                    data.add_series(series)
