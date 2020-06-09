@@ -89,6 +89,7 @@ class ImbieConfig(ConfigFile):
     align_date = ConfigParam("align_date", float, optional=True)
     average_nsigma = ConfigParam("average_nsigma", float, optional=True)
     plot_smooth_window = ConfigParam("plot_smooth_window", float, optional=True)
+    plot_smooth_iters = ConfigParam("plot_smooth_iters", int, optional=True)
 
     export_data = ConfigParam("export_data", bool, default=False)
     include_la = ConfigParam("enable_la_group", bool, default=False)
@@ -103,6 +104,10 @@ class ImbieConfig(ConfigFile):
     truncate_dmdt = ConfigParam("truncate_dmdt", bool, default=True)
 
     reduce_window = ConfigParam("reduce_window", float, optional=True)
+    data_smoothing_window = ConfigParam("data_smoothing_window", float, optional=True)
+    data_smoothing_iters = ConfigParam("data_smoothing_iters", int, optional=True)
+    export_smoothing_window = ConfigParam("export_smoothing_window", float, optional=True)
+    export_smoothing_iters = ConfigParam("export_smoothing_iters", int, optional=True)
 
     def read(self, fileobj) -> None:
         super().read(fileobj)

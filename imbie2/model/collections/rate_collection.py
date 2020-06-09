@@ -144,12 +144,12 @@ class WorkingMassRateCollection(Collection):
 
         return out
 
-    def smooth(self, window=None, clip=False) -> "WorkingMassRateCollection":
+    def smooth(self, window=None, clip=False, iters=1) -> "WorkingMassRateCollection":
         if window is None:
             return self
         out = WorkingMassRateCollection()
         for s in self:
-            out.add_series(s.smooth(window=window, clip=clip))
+            out.add_series(s.smooth(window=window, clip=clip, iters=iters))
         return out
 
     def filter(self, **kwargs) -> "WorkingMassRateCollection":

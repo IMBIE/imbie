@@ -163,3 +163,11 @@ class MassChangeCollection(Collection):
     def __iadd__(self, other: "MassChangeCollection") -> "MassChangeCollection":
         self.series += other.series
         return self
+
+    def smooth(self, window=None) -> "MassChangeCollection":
+        if window is None:
+            return self
+        out = MassChangeCollection()
+        for s in self:
+            out.add_series(s.smooth(window=window))
+        return out

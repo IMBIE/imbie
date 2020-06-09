@@ -350,14 +350,33 @@ class WorkingMassRateDataSeries(DataSeries):
             computed=True, truncate=crop_to
         )
 
-    def smooth(self, window: float=13./12, clip=False) -> "WorkingMassRateDataSeries":
-        # dmdt = move_av(window, self.dmdt, self.t, clip=clip)
-        dmdt = smooth_imbie(self.t, self.dmdt, window)
+    def smooth(self, window: float=13./12, clip=False, iters=1) -> "WorkingMassRateDataSeries":
+        if window is None:
+            return self
+
+        dmdt = smooth_imbie(self.t, self.dmdt, window, iters)
+        dmdt_err = smooth_imbie(self.t, self.errs, window, iters)
+
+        if clip:
+            margin = window / 2.
+
+            first_valid = np.argwhere(self.t < self.t.min() + margin).max()
+            final_valid = np.argwhere(self.t > self.t.max() - margin).min()
+
+            dmdt[:first_valid] = dmdt[first_valid]
+            dmdt[final_valid:] = dmdt[final_valid]
+
+            dmdt_err[:first_valid] = dmdt_err[first_valid]
+            dmdt_err[final_valid:] = dmdt_err[final_valid]
+
+            crop_to = self.t[first_valid], self.t[final_valid]
+        else:
+            crop_to = None
 
         return WorkingMassRateDataSeries(
             self.user, self.user_group, self.data_group, self.basin_group,
-            self.basin_id, self.basin_area, self.t, self.a, dmdt, self.errs,
-            self.computed, self.merged, self.aggregated
+            self.basin_id, self.basin_area, self.t, self.a, dmdt, dmdt_err,
+            self.computed, self.merged, self.aggregated, truncate=crop_to
         )
 
     def __len__(self) -> int:

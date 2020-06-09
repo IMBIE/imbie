@@ -130,3 +130,16 @@ class MassChangeDataSeries(DataSeries):
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
             a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=True
         )
+
+    def smooth(self, window: float=13./12) -> "MassChangeDataSeries":
+        if window is None:
+            return self
+
+        mass = smooth_imbie(self.t, self.mass, window)
+        mass_err = self.errs.copy()
+
+        return self.__class__(
+            self.user, self.user_group, self.data_group, self.basin_group,
+            self.basin_id, self.basin_area, self.t, self.a, mass, mass_err,
+            self.computed, self.merged, self.aggregated, self.contributions
+        )
