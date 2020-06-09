@@ -37,18 +37,18 @@ class DataSeries(metaclass=ABCMeta):
         # number of contributing data series
         self.contributions = contributions
 
-    def limit_times(self, min_t: float=None, max_t: float=None) -> None:
+    def limit_times(self, min_t: float=None, max_t: float=None, interp: bool=True) -> None:
         if min_t is not None:
-            self._set_min_time(min_t)
+            self._set_min_time(min_t, interp=interp)
         if max_t is not None:
-            self._set_max_time(max_t)
+            self._set_max_time(max_t, interp=interp)
 
     @abstractmethod
-    def _set_min_time(self, min_t: float) -> None:
+    def _set_min_time(self, min_t: float, interp: bool=True) -> None:
         return
 
     @abstractmethod
-    def _set_max_time(self, max_t: float) -> None:
+    def _set_max_time(self, max_t: float, interp: bool=True) -> None:
         return
 
     @abstractmethod

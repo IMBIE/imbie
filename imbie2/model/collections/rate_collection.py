@@ -131,13 +131,43 @@ class WorkingMassRateCollection(Collection):
         t, m, o = sum_series(ts, ms, ret_mask=True)
         e = e[o]
 
+        if any(s.trunc_extent is None for s in self):
+            trunc = None
+        else:
+            avg_min_margin = np.mean([
+                abs(s.trunc_extent[0] - s.t.min()) for s in self
+            ])
+            avg_max_margin = np.mean([
+                abs(s.trunc_extent[1] - s.t.max()) for s in self
+            ])
+            trunc = t.min() + avg_min_margin, t.max() - avg_max_margin
+
+        computed = any([series.computed for series in self])
+        merged = any([series.merged for series in self])
+        aggr = any([series.aggregated for series in self])
         count = sum([series.contributions for series in self])
+
         return WorkingMassRateDataSeries(
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e,
-            contributions=count
+            computed=computed, merged=merged, aggregated=aggr,
+            contributions=count, truncate=trunc
         )
 
-    def integrate(self, offset=None) -> "model.collections.MassChangeCollection":
+    def get_truncation_margins(self):
+        """
+        returns overall truncation margins for the collection
+        """
+        truncs = [series.trunc_extent for series in self]
+        if any(map(lambda a: a is None, truncs)):
+            return None
+        
+        t_min = min(map(lambda p: p[0], truncs))
+        t_max = max(map(lambda p: p[1], truncs))
+        trunc = t_min, t_max
+
+        return trunc
+
+    def integrate(self, offset=None, align=None) -> "model.collections.MassChangeCollection":
         out = model.collections.MassChangeCollection()
         for series in self:
             out.add_series(series.integrate(offset=offset))
@@ -164,10 +194,10 @@ class WorkingMassRateCollection(Collection):
             out.add_series(s.get_truncated())
         return out
 
-    def reduce(self, interval: float=1.):
+    def reduce(self, interval: float=1., centre=None, backfill=False):
         out = WorkingMassRateCollection()
         for s in self:
-            out.add_series(s.reduce(interval=interval))
+            out.add_series(s.reduce(interval=interval, centre=centre, backfill=backfill))
         return out
 
     def __add__(self, other: "WorkingMassRateCollection") -> "WorkingMassRateCollection":

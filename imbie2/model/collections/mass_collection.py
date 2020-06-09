@@ -52,6 +52,8 @@ class MassChangeCollection(Collection):
         )
 
     def average(self, mode=None) -> MassChangeDataSeries:
+        raise NotImplementedError()
+        
         if not self.series:
             return None
         elif len(self.series) == 1:
@@ -94,6 +96,12 @@ class MassChangeCollection(Collection):
             'e': [s.errs for s in self]
         }
         savemat(filename, data)
+
+    def reduce(self, interval: float=1., centre=None):
+        out = MassChangeCollection()
+        for s in self:
+            out.add_series(s.reduce(interval=interval, centre=centre))
+        return out
 
     def sum(self, error_method: ErrorMethod=ErrorMethod.sum) -> MassChangeDataSeries:
         if not self.series:
@@ -158,7 +166,12 @@ class MassChangeCollection(Collection):
         )
 
     def __add__(self, other: "MassChangeCollection") -> "MassChangeCollection":
-        return MassChangeCollection(*(self.series + other.series))
+        if isinstance(other, MassChangeDataSeries):
+            return MassChangeCollection(*(self.series + [other]))
+        elif isinstance(other, MassChangeCollection):
+            return MassChangeCollection(*(self.series + other.series))
+        else:
+            raise ValueError()
 
     def __iadd__(self, other: "MassChangeCollection") -> "MassChangeCollection":
         self.series += other.series
