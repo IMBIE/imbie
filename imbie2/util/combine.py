@@ -72,6 +72,7 @@ def weighted_combine(t, y, w=None, nsigma=None, average=False,
         ok = np.logical_and(
             _id == i, np.isfinite(y)
         )
+
         if nsigma is not None:
             # if nsigma has been specified, eliminate values far from the mean
             ok[ok] = np.abs(y[ok] - np.nanmean(y)) < max(nsigma, 1)*np.nanstd(y)
@@ -91,12 +92,11 @@ def weighted_combine(t, y, w=None, nsigma=None, average=False,
         # match time to monthly values
         t2 = t2m(ti)
         # use interpolation to find y-values and weights at the new times
-        y2 = interpol(ti, yi, t2)
-        w2 = interpol(ti, wi, t2)
+        y2 = interpol(ti, yi, t2, mode='nearest') # FIXME: maybe need to remove this
+        w2 = interpol(ti, wi, t2, mode='nearest')
         # find locations where the times match other items in the input
         m1, m2 = match(np.floor(t1 * 12), np.floor(t2 * 12))
-        # match,fix(t1*12),fix(t2*12),m1,m2
-        # print repr(y1), repr(y2), repr(m1), repr(m2)
+
         if verbose:
             plt.plot(t2, y2, '.', color=p[0].get_color())
         # add the values from the current input seq. to the output seq.
@@ -112,7 +112,6 @@ def weighted_combine(t, y, w=None, nsigma=None, average=False,
         # increment the values in c1 for each current point
         c1[m1] += w2[m2]
     # set any zeros in c1 to ones
-    # c11 = np.maximum(c1, np.ones(c1.shape))
     c11 = c1.copy()
     c11[c11 == 0] = 1.
     # use c1 to calculate the element-wise average of the data
