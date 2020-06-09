@@ -124,11 +124,15 @@ class MassChangeDataSeries(DataSeries):
             t = (rate_data.t0 + rate_data.t1) / 2.
             dM = np.cumsum(rate_data.dmdt) / 12.
             err = np.cumsum(rate_data.errs) / 12.
+            # TODO: confirm this
+            n = t - t[0]; n[0] = 1.
+            err /= np.sqrt(n)
 
         elif isinstance(rate_data, model.series.WorkingMassRateDataSeries):
             t = rate_data.t             # t = (rate_data.t[:-1] + rate_data.t[1:]) / 2.
             dM = np.cumsum(rate_data.dmdt) / 12.
-            err = np.cumsum(rate_data.errs) / 12.
+            # err = np.sqrt(np.cumsum(np.square(rate_data.errs / 12)) / np.arange(1, rate_data.errs.size+1))
+            err = np.sqrt(np.cumsum(np.square(rate_data.errs))) / np.sqrt(12) # FIXME: reset
 
         else: raise TypeError("Rates data expected")
 

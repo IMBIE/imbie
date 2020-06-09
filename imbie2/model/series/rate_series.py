@@ -103,10 +103,14 @@ class MassRateDataSeries(DataSeries):
         return len(self) > 0
 
     @property
+    def freq(self) -> float:
+        return np.mean(np.diff(self.t))
+
+    @property
     def sigma(self) -> float:
         return math.sqrt(
             np.nanmean(np.square(self.errs))
-        )  # / math.sqrt(len(self))
+        ) / np.sqrt(1. / self.freq)
 
     @property
     def mean(self) -> float:
@@ -229,7 +233,7 @@ class WorkingMassRateDataSeries(DataSeries):
     def sigma(self) -> float:
         return math.sqrt(
             np.nanmean(np.square(self.errs))
-        )  # / math.sqrt(len(self))
+        ) / np.sqrt(self.t.max()-self.t.min()) # np.sqrt(1. / self.freq)
 
     @property
     def mean(self) -> float:
@@ -398,7 +402,6 @@ class WorkingMassRateDataSeries(DataSeries):
         m = (a.dmdt[ia] + b.dmdt[ib]) / 2.
         e = np.sqrt((np.square(a.errs[ia]) +
                      np.square(b.errs[ib])) / 2.)
-        # ar = (a.a[ia] + b.a[ib]) / 2.
         ar = None
 
         comp = a.computed or b.computed
