@@ -1358,27 +1358,92 @@ class Plotter:
         return "regions_rate_intercomparison_" + "_".join(r.value for r in regions), {"frameon": False, "loc": 3}
 
     @render_plot_with_legend
-    def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection, avg: WorkingMassRateDataSeries=None):
+    def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection,
+                              avg: WorkingMassRateDataSeries=None, full_dmdt: WorkingMassRateCollection=None,
+                              alternative_avg: WorkingMassRateDataSeries=None,
+                              colors: style.UsersColorCollection=None):
         data = data.filter(user_group=group, basin_id=region)
+        self.ax.axhline(0, ls='--', color='k')
 
-        colormap = plt.cm.nipy_spectral
-        colorcycle = cycler('color', [colormap(i) for i in np.linspace(0, 1, len(data))])
-        self.ax.set_prop_cycle(colorcycle)
+        if colors is None:
+            users = list({s.user for s in data})
+            colors = style.UsersColorCollection(users)
+
+        glyphs = []
+        labels = []
+        min_errors = []
+        max_errors = []
 
         if avg is not None:
-            p = self.ax.plot(avg.t, avg.dmdt, ls='--', label='Average')
-            self.glyphs.append(p[0])
-            self.labels.append('Average')
+            p = self.ax.plot(avg.t, avg.dmdt, label='Average', color='grey', lw=7)
+            glyphs.append(p[0])
+            labels.append('Average')
+            min_err = "{:.2f}".format(np.nanmin(avg.errs))
+            max_err = "{:.2f}".format(np.nanmax(avg.errs))
+            min_errors.append(min_err)
+            max_errors.append(max_err)
 
             self.ax.fill_between(
                 avg.t, avg.dmdt - avg.errs, avg.dmdt + avg.errs,
-                color=p[0].get_color(), alpha=.5
+                color=p[0].get_color(), alpha=.25
+            )
+        
+        if alternative_avg is not None:
+            col = style.secondary['all']
+            self.ax.fill_between(
+                alternative_avg.t,
+                alternative_avg.dmdt - alternative_avg.errs,
+                alternative_avg.dmdt + alternative_avg.errs,
+                color='#333333', alpha=.3
             )
 
         for series in data:
-            p = self.ax.plot(series.t, series.dmdt, label=series.user)
-            self.glyphs.append(p[0])
-            self.labels.append(series.user)
+            col = colors[series.user]
+            if full_dmdt is not None:
+                s = full_dmdt.filter(user=series.user).first()
+                self.ax.plot(
+                    s.t, s.dmdt,
+                    color=col,
+                    linewidth=3,
+                    linestyle='--'
+                )   
+
+            p = self.ax.plot(
+                series.t, series.dmdt,
+                color=col,
+                linewidth=3,
+                label=series.user
+            )
+            glyphs.append(p[0])
+
+            computed_mark = " "
+            if series.computed == True:
+                computed_mark += "*"
+            elif series.user == "Rietbroek":
+                computed_mark += "*"
+
+            labels.append(series.user + computed_mark)
+            min_err = "{:.2f}".format(np.nanmin(series.errs))
+            max_err = "{:.2f}".format(np.nanmax(series.errs))
+            min_errors.append(min_err)
+            max_errors.append(max_err)
+
+        # create empty glyph for padding legend:
+        empty_glyph = mpatches.Rectangle((0, 0), 1, 1, fc="w", fill=False, edgecolor='none', linewidth=0)
+        empty_label = ''
+        legend_header = [[empty_label, 'Contributor', 'Min. Error (Gt/yr)', 'Max. Error (Gt/yr)']]
+        legend_rows = [[empty_label, user, _min, _max] for user, _min, _max in zip(labels, min_errors, max_errors)]
+        legend_labels = legend_header + legend_rows
+        # transpose list
+        legend_labels = list(map(list, zip(*legend_labels)))
+        # flatten list
+        self.labels = list(np.concatenate(legend_labels))
+
+        glyph_header =[[empty_glyph, empty_glyph, empty_glyph, empty_glyph]]
+        glyph_rows = glyph_header + [[g] + [empty_glyph]*3 for g in glyphs]
+        # transpose list
+        glyph_rows = list(map(list, zip(*glyph_rows)))
+        self.glyphs = list(np.concatenate(glyph_rows))
 
         # reduce width of plot by 20% to make space for legend
         box = self.ax.get_position()
@@ -1388,7 +1453,8 @@ class Plotter:
         self.ax.set_title(self._sheet_names[region])
         self.fig.autofmt_xdate()
 
-        return "named_dmdt_"+region.value+"_"+group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True)
+        legend_style = dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True, ncol=4, handletextpad=-2)
+        return "named_dmdt_"+region.value+"_"+group, legend_style
 
     @render_plot_with_legend
     def named_dm_group_plot(self, region: IceSheet, group: str, data: MassChangeCollection,
