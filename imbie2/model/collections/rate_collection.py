@@ -170,8 +170,7 @@ class WorkingMassRateCollection(Collection):
     def integrate(self, offset=None, align=None) -> "model.collections.MassChangeCollection":
         out = model.collections.MassChangeCollection()
         for series in self:
-            out.add_series(series.integrate(offset=offset))
-
+            out.add_series(series.integrate(offset=offset, align=align))
         return out
 
     def smooth(self, window=None, clip=False, iters=1) -> "WorkingMassRateCollection":
