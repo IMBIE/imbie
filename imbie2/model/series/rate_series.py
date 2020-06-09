@@ -1,5 +1,6 @@
 from .data_series import DataSeries
 import numpy as np
+from scipy.interpolate import interp1d
 import math
 
 from imbie2.util.functions import match, smooth_imbie
@@ -192,6 +193,14 @@ class WorkingMassRateDataSeries(DataSeries):
         start, end = self.trunc_extent
         return self.truncate(start, end)
 
+    def min_rate_time(self) -> float:
+        i = np.nanargmin(self.dmdt)
+        return self.t[i]
+
+    def max_rate_time(self) -> float:
+        i = np.nanargmax(self.dmdt)
+        return self.t[i]
+
     @property
     def min_rate(self) -> float:
         ok = np.isfinite(self.dmdt)
@@ -201,6 +210,20 @@ class WorkingMassRateDataSeries(DataSeries):
     def max_rate(self) -> float:
         ok = np.isfinite(self.dmdt)
         return np.max(self.dmdt[ok])
+
+    @property
+    def min_error(self) -> float:
+        ok = np.isfinite(self.errs)
+        return np.min(self.errs[ok])
+
+    @property
+    def max_error(self) -> float:
+        ok = np.isfinite(self.errs)
+        return np.max(self.errs[ok])
+
+    @property
+    def freq(self) -> float:
+        return np.mean(np.diff(self.t))
 
     @property
     def sigma(self) -> float:
@@ -381,9 +404,22 @@ class WorkingMassRateDataSeries(DataSeries):
         comp = a.computed or b.computed
         aggr = a.aggregated or b.aggregated
 
+        if a.trunc_extent is None and b.trunc_extent is None:
+            trunc = None
+        elif a.trunc_extent is None:
+            trunc = b.trunc_extent
+        elif b.trunc_extent is None:
+            trunc = a.trunc_extent
+        else:
+            a_min, a_max = a.trunc_extent
+            b_min, b_max = b.trunc_extent
+            trunc = min(a_min, b_min),\
+                    max(a_max, b_max)
+
         return cls(
             a.user, a.user_group, a.data_group, BasinGroup.sheets,
-            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=aggr
+            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=aggr,
+            truncate=trunc
         )
 
     @classmethod

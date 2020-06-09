@@ -1,7 +1,7 @@
 from .data_series import DataSeries
 import numpy as np
 
-from imbie2.util.functions import ts2m, match
+from imbie2.util.functions import ts2m, match, smooth_imbie
 from imbie2.util.offset import apply_offset, align_against
 from imbie2.const.basins import BasinGroup, Basin
 import imbie2.model as model
@@ -23,13 +23,19 @@ class MassChangeDataSeries(DataSeries):
     def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
                  basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
                  mass: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False,
-                 contributions: int=1):
+                 contributions: int=1, interpolate: bool=True):
         super().__init__(
             user, user_group, data_group, basin_group, basin_id, basin_area,
             computed, merged, aggregated, contributions
         )
-        self.t, self.mass = ts2m(time, mass)
-        # _, self.a = ts2m(time, area)
+        if interpolate:
+            self.t, self.mass = ts2m(time, mass)
+            _, self.errs = ts2m(time, errs)
+        else:
+            self.t = time
+            self.mass = mass
+            self.errs = errs
+            
         self.a = area
         _, self.errs = ts2m(time, errs)
         # self.t = time
