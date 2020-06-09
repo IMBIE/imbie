@@ -119,6 +119,19 @@ class Collection(metaclass=ABCMeta):
         """
         return None
 
+    def mean_temporal_resolution(self) -> float:
+        num_points = 0
+        total_time = 0
+
+        for series in self:
+            num_points += len(series)
+            total_time += series.max_time - series.min_time
+        
+        if not num_points:
+            return 0
+        
+        return total_time / num_points
+
     def __iter__(self) -> Iterable[Series]:
         return iter(self.series)
 

@@ -58,3 +58,6 @@ class DataSeries(metaclass=ABCMeta):
     @abstractmethod
     def _get_max_time(self) -> float:
         return
+
+    def temporal_resolution(self) -> float:
+        return (self.max_time - self.min_time) / len(self)
