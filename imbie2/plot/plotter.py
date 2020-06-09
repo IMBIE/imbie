@@ -1319,6 +1319,45 @@ class Plotter:
         return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}
 
     @render_plot_with_legend
+    def regions_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, *regions: Sequence[IceSheet]) -> str:
+        pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
+        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
+        self.ax.axhline(0, ls='--', color='k')
+
+        for region, pcol, scol in zip(regions, pcols, scols):
+            avg = region_avgs.filter(basin_id=region).average()
+
+            self.ax.plot(avg.t, avg.dmdt, color=pcol)
+            self.ax.fill_between(
+                    avg.t, avg.dmdt - avg.errs, avg.dmdt + avg.errs,
+                    color=scol, alpha=.5
+            )
+            self.labels.append(
+                    self._sheet_names[region]
+            )
+            self.glyphs.append(
+                    self.colour_glyph(pcol)
+            )
+
+        # get start & end time of common period
+        com_t_min = region_avgs.concurrent_start()
+        com_t_max = region_avgs.concurrent_stop()
+        # plot v. lines to show period
+        self.ax.axvline(com_t_min, ls='--', color='k')
+        self.ax.axvline(com_t_max, ls='--', color='k')
+
+        # set title & axis labels
+        self.ax.set_ylabel("Rate of Mass Change (Gt/yr)")
+        self.ax.set_title("Intercomparison of Regions")
+        self.fig.autofmt_xdate()
+        # set x- & y-axis limits
+        if self._set_limits:
+            self.ax.set_ylim(self._dmdt0, self._dmdt1)
+            self.ax.set_xlim(self._time0, self._time1)
+
+        return "regions_rate_intercomparison_" + "_".join(r.value for r in regions), {"frameon": False, "loc": 3}
+
+    @render_plot_with_legend
     def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection, avg: WorkingMassRateDataSeries=None):
         data = data.filter(user_group=group, basin_id=region)
 
