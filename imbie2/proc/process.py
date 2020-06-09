@@ -24,18 +24,34 @@ from imbie2.util.functions import ts2m, match, move_av
 from imbie2.util.discharge import calculate_discharge
 from imbie2.model.series import WorkingMassRateDataSeries, MassChangeDataSeries
 
-def prepare_collection(collection: Union[MassRateCollection, MassChangeCollection], config: ImbieConfig):
+def prepare_collection(collection: Union[MassRateCollection, MassChangeCollection],
+                       config: ImbieConfig) -> WorkingMassRateCollection:
+    """
+    converts an input collection to a WorkingMassRateCollection
+    """
     if isinstance(collection, MassRateCollection):
         # normalise dM/dt data
-        return collection.chunk_series()
+        out = collection.chunk_series()
+        sum_basins(out)
+        if config.apply_dmdt_smoothing:
+            out_smooth = out.smooth(config.dmdt_window, clip=True)
+        else:
+            out_smooth = out
     elif isinstance(collection, MassChangeCollection):
-        return collection.to_dmdt(
-                truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method
+        sum_basins(collection)
+        out = collection.to_dmdt(
+            truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method
         )
+        out_smooth = out
     else:
         raise TypeError("Expected dM or dM/dt collection")
+    return out, out_smooth
 
-def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]], config: ImbieConfig):
+def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]],
+            config: ImbieConfig) -> None:
+    """
+    runs the main process
+    """
 
     groups = ["RA", "GMB", "IOM"]
     if config.include_la:
@@ -69,21 +85,31 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     offset = config.align_date
 
     rate_data = WorkingMassRateCollection()
+    rate_data_unsmoothed = WorkingMassRateCollection()
     for collection in input_data:
-        collection = prepare_collection(collection, config)
+        unsmoothed_collection, collection = prepare_collection(collection, config)
+
         for series in collection:
             # check if there's already a series for this user & location
             existing = rate_data.filter(
-                user_group=series.user_group, user=series.user, basin_id=series.basin_id, basin_group=series.basin_group
+                user_group=series.user_group,
+                user=series.user,
+                basin_id=series.basin_id,
+                basin_group=series.basin_group
             )
             if not existing:
                 rate_data.add_series(series)
 
-    for series in rate_data.filter(user_group='RA'):
-        print(series.user, series.basin_id, series.t.max(), 'dM' if series.computed else 'dM/dt')
-
-    # find users who have provided a full ice sheet of basin data, but no ice sheet series.
-    sum_basins(rate_data, sheets)
+        for series in unsmoothed_collection:
+            # check if there's already a series for this user & location
+            existing = rate_data_unsmoothed.filter(
+                user_group=series.user_group,
+                user=series.user,
+                basin_id=series.basin_id,
+                basin_group=series.basin_group
+            )
+            if not existing:
+                rate_data_unsmoothed.add_series(series)
 
     # keep copies of zwally/rignot data before merging them
     zwally_data = rate_data.filter(basin_group=BasinGroup.zwally)
@@ -91,8 +117,11 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
     # merge zwally/rignot
     rate_data.merge()
+    rate_data_unsmoothed.merge()
 
     mass_data = rate_data.integrate(offset=offset)
+    mass_data_unsmoothed =\
+        rate_data_unsmoothed.integrate(offset=offset)
 
     # create empty collections for storing outputs
     groups_sheets_rate = WorkingMassRateCollection()
@@ -115,7 +144,9 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
     if config.reduce_window is not None:
         assert config.reduce_window > 0
-        rate_data = rate_data.reduce(config.reduce_window)
+        rate_data = rate_data.reduce(config.reduce_window, centre=.495, backfill=True) #  centre=.5,
+        rate_data_unsmoothed =\
+            rate_data_unsmoothed.reduce(config.reduce_window, centre=.495, backfill=False) #  centre=.5,
 
     for group in groups:
         for sheet in sheets:
@@ -146,6 +177,9 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
                 continue
 
             region_rate.basin_id = region
+            
+            if config.data_smoothing_window is not None:
+                region_rate = region_rate.smooth(config.data_smoothing_window, iters=config.data_smoothing_iters) #clip=True
             region_mass = region_rate.integrate(offset=offset)
 
             groups_regions_rate.add_series(region_rate)
@@ -183,6 +217,8 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
         region_rate.basin_id = region
 
+        if config.data_smoothing_window is not None:
+            region_rate = region_rate.smooth(config.data_smoothing_window, iters=config.data_smoothing_iters)
         regions_rate.add_series(region_rate)
         regions_mass.add_series(
             region_rate.integrate(offset=offset)
