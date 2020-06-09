@@ -1496,16 +1496,8 @@ class Plotter:
                 pairs.append((series_a, series_b))
 
         if not pairs:
-            return "", {}
+            return None, {}
 
-
-        # colormap = plt.cm.nipy_spectral
-        # colorcycle = (colormap(i) for i in np.linspace(0, 1, len(pairs)))
-        #
-        # size = int(np.sqrt(len(pairs)) + 1)
-        # fig, axes = plt.subplots(size, size, True, True)
-
-        # for color, (series_a, series_b), ax in zip(colorcycle, pairs, axes.flat):
         for series_a, series_b in pairs:
             ax = self.ax
 
@@ -1531,3 +1523,907 @@ class Plotter:
 
         return "named_dmdt_comparison_" + suffix, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.,
                                                                 extra=True)
+
+    @render_plot
+    def named_dmdt_all(self, regions: Sequence[IceSheet], groups: Sequence[str], data: WorkingMassRateCollection,
+                              avg: WorkingMassRateCollection=None, full_dmdt: WorkingMassRateCollection=None,
+                              alternative_avg: WorkingMassRateCollection=None, sharex: bool=False, suffix: str=None,
+                              flip_grid: bool=False, t_range=None, tag=None) -> str:
+        """
+        gridded plot of all methods & ice sheets
+        """
+        if not flip_grid:
+            nrows = len(regions)
+            ncols = len(groups)
+        else:
+            nrows = len(groups)
+            ncols = len(regions)
+
+        groups_names = {}
+        groups_colours = {}
+
+        cyc_markers = cycle("os<v>^<>D")
+
+        names = sorted({s.user for s in data})
+        colours = style.UsersColorCollection(names)
+        markers = {u: m for u, m in zip(names, cyc_markers)}
+
+        mpl.rc('font', size=18)
+        self.fig, axs = plt.subplots(nrows, ncols, sharex=sharex)
+        if nrows == 1:
+            axs = np.expand_dims(axs, axis=0)
+        if ncols == 1:
+            axs = np.expand_dims(axs, axis=1)
+        if not flip_grid:
+            self.fig.autofmt_xdate()
+
+        self.fig.set_size_inches(ncols*6, nrows*8 + 2)
+        plot_n = 0
+
+        for n_group, group in enumerate(groups):
+            group_names = sorted({s.user for s in data.filter(user_group=group, basin_id=regions)})
+
+            for n_sheet, sheet in enumerate(regions):
+                if not flip_grid:
+                    ax_x = n_group
+                    ax_y = n_sheet
+                else:
+                    ax_x = n_sheet
+                    ax_y = n_group
+                ax = axs[ax_y, ax_x]
+                ax.axhline(0, ls='--', color='k')
+
+                if t_range is not None:
+                    ax.set_xlim(t_range)
+
+                if tag is None:
+                    plot_label = chr(ord('a')+plot_n)
+                else:
+                    plot_label = tag
+                plot_n += 1
+
+                ax.text(
+                    .05, .95, plot_label,
+                    horizontalalignment='left',
+                    verticalalignment='top',
+                    transform=ax.transAxes
+                )
+
+                if not flip_grid:
+                    if ax_y == 0:
+                        ax.set_title(self._group_names[group])
+                    if ax_y == nrows-1:
+                        ax.set_xlabel("Year")
+
+                        patches = [mlines.Line2D([], [], linewidth=3, marker=markers[u], color=colours[u]) for u in group_names]
+
+                        if axs.size == 1:
+                            ax.legend(
+                                patches, group_names,
+                                loc='upper left',
+                                bbox_to_anchor=(1, 1),
+                                borderaxespad=0,
+                                frameon=False
+                            )
+                        else:
+                            ax.legend(
+                                patches, group_names,
+                                loc='upper center', ncol=2,
+                                bbox_to_anchor=(0.5, -0.25),
+                                mode="expand", borderaxespad=0.
+                            )
+
+                    if ax_x == 0:
+                        ax.annotate(self._sheet_names[sheet],
+                            xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - 5, 0),
+                            xycoords=ax.yaxis.label, textcoords='offset points',
+                            size='large', ha='center', va='center', rotation=90)
+                        y_label = r"Mass Balance (Gt $\mathregular{yr^{-1}}$)"
+                        ax.set_ylabel(y_label)
+                
+                else:
+                    if ax_y == 0:
+                        ax.set_title(self._sheet_names[sheet])
+                    if ax_x == ncols-1:
+                        patches = [mlines.Line2D([], [], markersize=10, linewidth=3, marker=markers[u], color=colours[u]) for u in group_names]
+                        ax.legend(
+                            patches, group_names,
+                            loc='upper left',
+                            bbox_to_anchor=(1, 1),
+                            borderaxespad=0,
+                            frameon=False
+                        )
+                    if ax_y == nrows-1 or flip_grid:
+                        ax.set_xlabel("Year")
+                    if ax_x == 0:
+                        ax.annotate(self._group_names[group],
+                            xy=(0, 0.5), xytext=(-ax.yaxis.labelpad - 5, 0),
+                            xycoords=ax.yaxis.label, textcoords='offset points',
+                            size='large', ha='center', va='center', rotation=90)
+                        y_label = r"Mass Balance (Gt $\mathregular{yr^{-1}}$)"
+                        ax.set_ylabel(y_label)
+
+                if avg is not None:
+                    avg_series = avg.filter(user_group=group, basin_id=sheet).first()
+                    p = ax.plot(avg_series.t, avg_series.dmdt, label='Average', color='grey', lw=7)
+
+                    bands = ['#dddddd', '#bbbbbb', '#999999']
+                    for nsig, c in zip([3, 2, 1], bands):
+
+                        ax.fill_between(
+                            avg_series.t,
+                            avg_series.dmdt - avg_series.errs * nsig,
+                            avg_series.dmdt + avg_series.errs * nsig,
+                            color=c  # , alpha=.25
+                        )
+                
+                if alternative_avg is not None:
+                    avg_series = alternative_avg.filter(user_group=group, basin_id=sheet).first()
+                    col = style.secondary['all']
+                    ax.fill_between(
+                        avg_series.t,
+                        avg_series.dmdt - avg_series.errs,
+                        avg_series.dmdt + avg_series.errs,
+                        color='#333333', alpha=.3
+                    )
+
+                for series in data.filter(user_group=group, basin_id=sheet):
+                    col = colours[series.user]
+                    m = markers[series.user]
+
+                    if full_dmdt is not None:
+                        s = full_dmdt.filter(
+                            user=series.user,
+                            user_group=group,
+                            basin_id=sheet
+                        ).first()
+
+                        ax.plot(
+                            s.t, s.dmdt,
+                            color=col,
+                            linewidth=3,
+                            linestyle='--'
+                        )   
+
+                    ax.plot(
+                        series.t, series.dmdt,
+                        color=col,
+                        linewidth=3,
+                        marker=m,
+                        label=series.user
+                    )
+        
+        for ax_y, sheet in enumerate(regions):
+            reg_min_y = None
+            reg_max_y = None
+            for ax_x, group in enumerate(groups):
+                if flip_grid:
+                    ax = axs[ax_x, ax_y]          
+                else:
+                    ax = axs[ax_y, ax_x]
+
+                ax_min_y, ax_max_y = ax.get_ylim()
+                if reg_max_y is None or reg_max_y < ax_max_y:
+                    reg_max_y = ax_max_y
+                
+                if reg_min_y is None or reg_min_y > ax_min_y:
+                    reg_min_y = ax_min_y
+            
+            for ax_x, group in enumerate(groups):
+                if flip_grid:
+                    ax = axs[ax_x, ax_y]
+                else:
+                    ax = axs[ax_y, ax_x]
+
+                ax.set_ylim(reg_min_y, reg_max_y)
+
+                if not flip_grid and ax_x > 0:
+                    ax.axes.get_yaxis().set_ticklabels([])
+
+        suf = "_share_x" if sharex else ""
+        if suffix is not None:
+            suf += '_'  + suffix
+        return "named_dmdt_all" + suf
+
+    
+    @render_plot_with_legend
+    def ais_four_panel_plot(self, rate_data: WorkingMassRateCollection, average_rates: WorkingMassRateCollection,
+                            sheet_mass: MassChangeCollection):
+        """
+        four panel plot showing dM/dt per user (coloured by group) for APIS, EAIS, WAIS in first
+        three panels, plus aggregated dM(t) per ice sheet coloured for APIS, EAIS, WAIS & AIS in
+        final panel
+        """
+
+        self.fig, (*sheet_axs, cross_ax) = plt.subplots(4, sharex=True)
+        self.fig.autofmt_xdate()
+        self.fig.set_size_inches(16, 36)
+
+        ymin = 0
+        ymax = 0
+
+        sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
+        for sheet, ax in zip(sheets, sheet_axs):
+            ax.set_title(self._sheet_names[sheet])
+            ax.set_ylabel("dM/dt (Gt/yr)")
+
+            for series in rate_data.filter(basin_id=sheet):
+                col = style.primary[series.user_group]
+                ax.plot(series.t, series.dmdt, color=col)
+
+            series = average_rates.filter(basin_id=sheet).first()
+            
+            pcol = style.primary['all']
+            scol = style.secondary['all']
+
+            ax.plot(series.t, series.dmdt, color=pcol)
+            ax.fill_between(
+                series.t,
+                series.dmdt-series.errs,
+                series.dmdt+series.errs,
+                color=scol, alpha=.5
+            )
+            labels = [
+                "Altimetry", "Gravimetry", "Mass Budget", "Average"
+            ]
+            glyphs = [
+                self.colour_glyph(style.primary['RA']),
+                self.colour_glyph(style.primary['GMB']),
+                self.colour_glyph(style.primary['IOM']),
+                self.colour_glyph(style.primary['all']),
+            ]
+
+            legend = ax.legend(glyphs, labels, loc=3)
+            ax.add_artist(legend)
+
+            ax_ymin, ax_ymax = ax.get_ylim()
+            ymin = min(ymin, ax_ymin)
+            ymax = max(ymax, ax_ymax)
+
+        for ax in sheet_axs:
+            ax.set_ylim(ymin, ymax)
+
+        pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
+        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
+
+        cross_ax.set_title('Antarctica')
+        cross_ax.set_ylabel('Mass Change (Gt)')
+
+        for sheet, pcol, scol in zip([IceSheet.ais]+sheets, pcols, scols):
+            series = sheet_mass.filter(basin_id=sheet).first()
+
+            self.labels.append(
+                self._sheet_names[sheet]
+            )
+            self.glyphs.append(
+                self.colour_glyph(scol)
+            )
+
+            cross_ax.plot(series.t, series.mass, color=pcol)
+            cross_ax.fill_between(
+                series.t,
+                series.mass-series.errs,
+                series.mass+series.errs,
+                color=scol, alpha=.5
+            )
+                    
+        return "ais_four_panel_plot", dict(loc=3)
+
+    @render_plot
+    def annual_dmdt_bars(self, user_rates: WorkingMassRateCollection, sheet_rates: WorkingMassRateCollection, fix_y: bool=False,
+                         external_plot: bool=True, imbie1: bool=False, sheets: Sequence[IceSheet]=None, ref_rates: WorkingMassRateCollection=None):
+        """
+        """
+        if sheets is None:
+            sheets = [IceSheet.apis, IceSheet.wais, IceSheet.eais]
+
+        interval = 1.
+        spacing = .5
+        h_width = (interval - spacing) / 2.
+        # n_plots = 4 if external_plot else 3
+        n_plots = len(sheets)
+        counts_above = False
+
+        if external_plot:
+            n_plots += 1
+            self.fig, (*sheet_axs, final_ax) = plt.subplots(n_plots, sharex=True)
+        else:
+            self.fig, sheet_axs = plt.subplots(n_plots, sharex=True)
+            if n_plots == 1:
+                sheet_axs = [sheet_axs]
+
+        self.fig.set_size_inches(16, 9*n_plots)
+        mpl.rc('font', size=22)
+        ymin = 0
+        ymax = 0
+
+        tags = [chr(ord('a') + i) for i, _ in enumerate(sheets)]
+        for sheet, ax, label in zip(sheets, sheet_axs, tags):
+
+            if len(tags) > 1:
+                ax.text(
+                    .05, .95, label,
+                    horizontalalignment='left',
+                    verticalalignment='top',
+                    transform=ax.transAxes
+                )
+
+            ax.xaxis.set_tick_params(which='both', top='on', bottom='on', length=8)
+            ax.yaxis.set_tick_params(which='both', left='on', right='on', length=8)
+            ax.xaxis.set_minor_locator(MultipleLocator(1))
+
+            ax.axhline(0, ls='--', color='k')
+
+            avg_series = sheet_rates.filter(basin_id=sheet).first()
+
+            t_beg = np.floor(avg_series.t.min())
+            t_end = np.ceil(avg_series.t.max())
+
+            l_times = []    
+            l_texts = []
+
+            print(sheet.value)
+            print('year','dmdt','dmdt_sig1')
+
+            for t in np.arange(t_beg, t_end, interval) + .5:
+                if not (avg_series.t.min() <= t <= avg_series.t.max()):
+                    continue
+                l_beg = t - h_width
+                l_end = t + h_width
+
+                i = np.argmin(np.abs(avg_series.t - t)) # get index of nearest value
+                avg_dmdt = avg_series.dmdt[i]
+                avg_sig1 = avg_series.errs[i]
+                avg_sig2 = avg_sig1*2
+                avg_sig3 = avg_sig1*3
+
+                line = ['%.2f' % n for n in (t, avg_dmdt, avg_sig1)]
+                print(','.join(line))
+
+                pcol = style.primary['all']
+                scol = style.secondary['all']
+
+                ax.fill_between(
+                    [l_beg, l_end],
+                    [avg_dmdt-avg_sig3, avg_dmdt-avg_sig3],
+                    [avg_dmdt+avg_sig3, avg_dmdt+avg_sig3],
+                    color='#dddddd' # , alpha=.25 # alpha=.175
+                )
+                ax.fill_between(
+                    [l_beg, l_end],
+                    [avg_dmdt-avg_sig2, avg_dmdt-avg_sig2],
+                    [avg_dmdt+avg_sig2, avg_dmdt+avg_sig2],
+                    color='#bbbbbb' # scol, alpha=.5 # alpha=.25
+                )
+                ax.fill_between(
+                    [l_beg, l_end],
+                    [avg_dmdt-avg_sig1, avg_dmdt-avg_sig1],
+                    [avg_dmdt+avg_sig1, avg_dmdt+avg_sig1],
+                    color='#999999' # scol, alpha=.75 # alpha=.5
+                )
+                ax.plot(
+                    [l_beg, l_end],
+                    [avg_dmdt, avg_dmdt],
+                    color='#333333' # pcol
+                )
+                n_contrib = 0
+                n_1_sig = 0
+                n_2_sig = 0
+                n_3_sig = 0
+                outside = 0
+
+                for series in user_rates.filter(basin_id=sheet):
+                    t_diff = np.abs(series.t - t)
+                    if t_diff.min() > 1.1 * (interval / 2.):
+                        continue
+                    i = np.argmin(t_diff) # get index of nearest value
+
+                    n_contrib += 1
+
+                    dmdt = series.dmdt[i]
+
+                    pcol = style.primary[series.user_group]
+
+                    ax.plot(
+                        [l_beg, l_end],
+                        [dmdt, dmdt],
+                        color=pcol
+                    )
+                    if avg_dmdt-avg_sig1 <= dmdt <= avg_dmdt+avg_sig1:
+                        n_1_sig += 1
+                    if avg_dmdt-avg_sig2 <= dmdt <= avg_dmdt+avg_sig2:
+                        n_2_sig += 1
+                    if avg_dmdt-avg_sig3 <= dmdt <= avg_dmdt+avg_sig3:
+                        n_3_sig += 1
+                    else:
+                        outside += 1
+
+                if counts_above:
+                    l_times.append(t)
+                    l_texts.append(str(n_contrib))
+                else:
+                    bbox_props = dict(
+                        boxstyle='circle,pad=0.6',
+                        alpha=0, lw=0
+                    )
+
+                    text = ax.text(
+                        t, avg_dmdt-avg_sig3,
+                        str(n_contrib),
+                        ha='center', va='top',
+                        size=12, bbox=bbox_props
+                    )
+
+            if imbie1:
+                fname = '~/imbie/imbie1_outputs/imbie_all_{}.x3.csv'.format(sheet.value)
+                imbie1_data = pd.read_csv(
+                    fname,
+                    header=0, index_col=0,
+                    usecols=[0, 1, 2],
+                    names=['date', 'rate', 'rate_sd']
+                )
+
+                ax.plot(imbie1_data.rate, ':k', label='IMBIE 2012')
+            
+            if ref_rates is not None:
+                ref_series = ref_rates.filter(basin_id=sheet).first()
+
+                if ref_series is not None:
+                    ax.errorbar(
+                        ref_series.t, ref_series.dmdt, yerr=ref_series.errs,
+                        lw=0, marker='D', color='k', label='Reference',
+                        barsabove=True, capsize=6, elinewidth=2, zorder=1000
+                    )
+
+            ax_ymin, ax_ymax = ax.get_ylim()
+            ymin = min(ymin, ax_ymin)
+            ymax = max(ymax, ax_ymax)
+
+            # ax.set_title(self._sheet_names[sheet])
+            p = mpatches.Patch(alpha=0, ec='none')
+            l = ax.legend([p], [self._sheet_names[sheet]], loc=1, frameon=False, framealpha=0)
+            ax.add_artist(l)
+
+            ax.set_ylabel("dM/dt (Gt $\mathregular{yr^{-1}}$)")
+            ax.set_xlabel('Year')
+            plt.setp(ax.get_xticklabels(), visible=True)
+
+            ax2 = ax.twiny()
+            ax2.set_xlim(ax.get_xlim())
+            ax2.set_xticks(l_times)
+            ax2.set_xticklabels(l_texts, fontsize=12, rotation='vertical')
+
+            if len(tags) == 1:
+                box = ax.get_position()
+                box = [box.x0, box.y0, box.width, box.height*.9]
+                ax.set_position(box)
+                ax2.set_position(box)
+            # ax2.xaxis.tick_top()
+
+        if fix_y:
+            for ax in sheet_axs:
+                # ax.set_ylim(ymin, ymax)
+                ax.set_ylim(self._imbie1_ylim_dmdt)
+        for ax in sheet_axs:
+            box = ax.get_position()
+            ax2 = ax.twinx()
+            ax2.set_position(box)
+            _min, _max = ax.get_ylim()
+            lims = _min / -360, _max / -360
+            ax2.set_ylim(lims)
+            ax2.set_ylabel('Sea Level Contribution (mm $\mathregular{yr^{-1}}$)')
+
+        labels = [
+            # "Altimetry", "Gravimetry", "Mass Budget", "Average"
+            self._group_names['RA'],
+            self._group_names['GMB'],
+            self._group_names['IOM'],
+            self._group_names['all']
+        ]
+        if imbie1:
+            labels.append('IMBIE 2012')
+        
+        glyphs = [
+            mlines.Line2D([], [], color=style.primary['RA']),
+            mlines.Line2D([], [], color=style.primary['GMB']),
+            mlines.Line2D([], [], color=style.primary['IOM']),
+            (mpatches.Patch(color='#999999'),
+             mlines.Line2D([], [], color='#333333')),
+        ]
+        if imbie1:
+            glyphs.append(mlines.Line2D([], [], color='k', ls=':'))
+        legend_style = dict(frameon=False, framealpha=0)
+
+        if external_plot:
+            ax = sheet_axs[0]
+            legend_style.update(loc=3, frameon=False, framealpha=0)
+            legend = ax.legend(glyphs, labels, **legend_style)
+            ax.add_artist(legend)
+        else:
+            self.fig.legend(
+                glyphs, labels,
+                loc='upper center', ncol=3 if imbie1 else 2,
+                mode='expand', frameon=False
+            )
+
+        if external_plot:
+            final_ax.xaxis.set_tick_params(which='both', top='on', bottom='on', length=8)
+            final_ax.yaxis.set_tick_params(which='both', left='on', right='on', length=8)
+            final_ax.xaxis.set_minor_locator(MultipleLocator(1))
+
+            p = mpatches.Patch(alpha=0, ec='none')
+            l = final_ax.legend([p], ['Antarctica'], loc=1, frameon=False, framealpha=0)
+            final_ax.add_artist(l)
+            final_ax.set_ylabel('Mass Change (Gt)')
+
+            final_ax.text(
+                .05, .95, 'd',
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes
+            )
+
+            supl_data = pd.read_csv(
+                '~/Downloads/ais_data_out.txt',
+                header=None,
+                names=["year_ais",
+                    "dm_eais",
+                    "dm_eais_sd",
+                    "dm_wais",
+                    "dm_wais_sd",
+                    "dm_apis",
+                    "dm_apis_sd",
+                    "dm_ais",
+                    "dm_ais_sd"],
+                delim_whitespace=True
+            )
+            names = ['ais', 'wais', 'eais', 'apis']
+            pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
+            scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
+            t = supl_data.year_ais
+
+            full_names = {
+                'ais': 'Antarctica',
+                'wais': 'West Antarctica',
+                'eais': 'East Antarctica',
+                'apis': 'Antarctic Peninsula'
+            }
+            labels = []
+            glyphs = []
+
+            for name, pcol, scol in zip(names, pcols, scols):
+                dm = getattr(supl_data, 'dm_'+name)
+                sd = getattr(supl_data, 'dm_'+name+'_sd')
+
+                final_ax.plot(t, dm, color=pcol)
+                final_ax.fill_between(
+                    t,
+                    dm-sd,
+                    dm+sd,
+                    color=scol,
+                    alpha=.5
+                )
+                glyphs.append(
+                    self.colour_glyph(pcol)
+                )
+                labels.append(
+                    full_names[name]
+                )
+
+
+            l = final_ax.legend(glyphs, labels, loc=3, frameon=False, framealpha=0)
+            final_ax.add_artist(l)
+
+            ax2 = final_ax.twinx()
+            _min, _max = final_ax.get_ylim()
+            lims = _min / -360, _max / -360
+            ax2.set_ylim(lims)
+            ax2.set_ylabel('Sea Level Contribution (mm)')
+
+
+        suffix = "_fixed_y" if fix_y else ""
+        if external_plot:
+            suffix += "_ext"
+        suffix += '_'+'_'.join(sheet.value for sheet in sheets)
+        return "annual_dmdt_bars"+suffix
+
+    @render_plot
+    def greenland_plot(self, data: MassChangeDataSeries, imbie1: bool=False) -> str:
+        from matplotlib.ticker import MultipleLocator
+
+        self.ax.xaxis.set_tick_params(which='both', top='on', bottom='on', length=8)
+        self.ax.yaxis.set_tick_params(which='both', left='on', right='on', length=8)
+        self.ax.xaxis.set_minor_locator(MultipleLocator(1))
+
+        self.ax.set_title('Greenland')
+        self.ax.set_ylabel('Mass Change (Gt)')
+
+        pcol = "#531A59"
+        scol = "#9E58A5"
+
+        p, = self.ax.plot(data.t, data.mass, color=pcol)
+        self.ax.fill_between(
+            data.t,
+            data.mass-data.errs,
+            data.mass+data.errs,
+            color=scol,
+            alpha=.5
+        )
+        glyphs = [
+            (self.colour_glyph(scol, alpha=.5), p)
+        ]
+        labels = ["IMBIE 2018"]
+
+        if imbie1:
+
+            fname = '~/imbie/imbie1_outputs/imbie_all_gris.x3.csv'
+            imbie1_data = pd.read_csv(
+                fname,
+                header=0, index_col=0,
+                usecols=[0, 3, 4],
+                names=['date', 'mass', 'mass_sd']
+            )
+
+            self.ax.plot(
+                imbie1_data.date.values,
+                imbie1_data.mass.values,
+                ls=':', color=pcol,
+                label='IMBIE 2012'
+            )
+
+        
+            glyphs.append(
+                mlines.Line2D([], [], ls=':', color='k')
+            )
+            labels.append(
+                'IMBIE 2012'
+            )
+
+        l = self.ax.legend(glyphs, labels, loc=3, frameon=False, framealpha=0)
+        self.ax.add_artist(l)
+        self.ax.set_ylim(self._imbie1_ylim_dm)
+
+        ax2 = self.ax.twinx()
+        _min, _max = self.ax.get_ylim()
+        lims = _min / -360, _max / -360
+        ax2.set_ylim(lims)
+        ax2.set_ylabel('Sea Level Contribution (mm)')
+
+        return "gris_mass_comparison"
+
+    @render_plot
+    def external_data_plot(self, imbie1: bool=False) -> str:
+        from matplotlib.ticker import MultipleLocator
+
+        self.ax.xaxis.set_tick_params(which='both', top='on', bottom='on', length=8)
+        self.ax.yaxis.set_tick_params(which='both', left='on', right='on', length=8)
+        self.ax.xaxis.set_minor_locator(MultipleLocator(1))
+
+        self.ax.set_title('Antarctica')
+        self.ax.set_ylabel('Mass Change (Gt)')
+
+        supl_data = pd.read_csv(
+            '~/Downloads/ais_data_out.txt',
+            header=None,
+            names=["year_ais",
+                "dm_eais",
+                "dm_eais_sd",
+                "dm_wais",
+                "dm_wais_sd",
+                "dm_apis",
+                "dm_apis_sd",
+                "dm_ais",
+                "dm_ais_sd"],
+            delim_whitespace=True
+        )
+        names = ['ais', 'wais', 'eais', 'apis']
+        pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
+        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
+        t = supl_data.year_ais
+
+        full_names = {
+            'ais': 'Antarctica',
+            'wais': 'West Antarctica',
+            'eais': 'East Antarctica',
+            'apis': 'Antarctic Peninsula'
+        }
+        labels = []
+        glyphs = []
+
+        for name, pcol, scol in zip(names, pcols, scols):
+            dm = getattr(supl_data, 'dm_'+name)
+            sd = getattr(supl_data, 'dm_'+name+'_sd')
+
+            p, = self.ax.plot(t, dm, color=pcol)
+            self.ax.fill_between(
+                t,
+                dm-sd,
+                dm+sd,
+                color=scol,
+                alpha=.5
+            )
+            glyphs.append(
+                (self.colour_glyph(scol, alpha=.5), p)
+            )
+            labels.append(
+                full_names[name]
+            )
+
+            if name == 'ais' or not imbie1:
+                continue
+
+            fname = '~/imbie/imbie1_outputs/imbie_all_{}.x3.csv'.format(name)
+            imbie1_data = pd.read_csv(
+                fname,
+                header=0, index_col=0,
+                usecols=[0, 3, 4],
+                names=['date', 'mass', 'mass_sd']
+            )
+
+            self.ax.plot(imbie1_data.mass, ls=':', color=pcol, label='IMBIE 2012')
+
+        if imbie1:
+            glyphs.append(
+                mlines.Line2D([], [], ls=':', color='k')
+            )
+            labels.append(
+                'IMBIE 2012'
+            )
+
+        l = self.ax.legend(glyphs, labels, loc=3, frameon=False, framealpha=0)
+        self.ax.add_artist(l)
+        self.ax.set_ylim(self._imbie1_ylim_dm)
+
+        ax2 = self.ax.twinx()
+        _min, _max = self.ax.get_ylim()
+        lims = _min / -360, _max / -360
+        ax2.set_ylim(lims)
+        ax2.set_ylabel('Sea Level Contribution (mm)')
+
+        return "external_data_plot"
+
+    @render_plot
+    def discharge_plot(self, mean_discharge: MassChangeDataSeries, groups_discharge: MassChangeCollection,
+                       users_discharge: MassChangeCollection) -> str:
+        self.ax.fill_between(
+            mean_discharge.t,
+            mean_discharge.mass-mean_discharge.errs,
+            mean_discharge.mass+mean_discharge.errs,
+            facecolor=style.colours.secondary['all'],
+            edgecolor=style.colours.primary['all'],
+            alpha=.5, lw=1
+        )
+        self.ax.plot(
+            mean_discharge.t, mean_discharge.mass,
+            lw=2, color=style.colours.primary['all'],
+            label='All'
+        )
+
+        for group in 'IOM', 'RA', 'GMB':
+            discharge = groups_discharge.filter(
+                user_group=group
+            ).first()
+
+            if discharge is None:
+                continue
+
+            self.ax.fill_between(
+                discharge.t,
+                discharge.mass-discharge.errs,
+                discharge.mass+discharge.errs,
+                facecolor=style.colours.secondary[group],
+                edgecolor=style.colours.primary[group],
+                alpha=.5, lw=1
+            )
+            self.ax.plot(
+                discharge.t, discharge.mass,
+                lw=2, color=style.colours.primary[group],
+                label=self._group_names[group]
+            )
+
+        for i, series in enumerate(users_discharge):
+            self.ax.fill_between(
+                series.t,
+                series.mass-series.errs,
+                series.mass+series.errs,
+                edgecolor='#ee33aa', lw=1,
+                facecolor='#ee33aa', alpha=.5
+            )
+
+            self.ax.plot(
+                series.t, series.mass,
+                lw=2, color='#ee33aa',
+                label=series.user
+            )
+
+        l = self.ax.legend(loc=3, frameon=False, framealpha=0)
+        self.ax.add_artist(l)
+        self.ax.set_ylabel('Discharge (Gt)')
+        self.ax.set_title('Greenland')
+
+        ax2 = self.ax.twinx()
+        _min, _max = self.ax.get_ylim()
+        lims = _min / -360, _max / -360
+        ax2.set_ylim(lims)
+        ax2.set_ylabel('Sea Level Contribution (mm)')
+
+        return "discharge_plot"
+
+    @render_plot
+    def discharge_comparison_plot(self, mass_balance: MassChangeDataSeries, surface_mass: MassChangeDataSeries, discharge: MassChangeDataSeries) -> str:
+        self.ax.fill_between(
+            mass_balance.t,
+            mass_balance.mass-mass_balance.errs,
+            mass_balance.mass+mass_balance.errs,
+            alpha=.5, color='#9E58A5'
+        )
+        self.ax.plot(
+            mass_balance.t, mass_balance.mass, color='#531A59', label='IMBIE 2018'
+        )
+        self.ax.fill_between(
+            surface_mass.t,
+            surface_mass.mass-surface_mass.errs,
+            surface_mass.mass+surface_mass.errs,
+            alpha=.5, color='#4CA58F'
+        )
+        self.ax.plot(
+            surface_mass.t, surface_mass.mass, color='#1B8C6F', label='SMB'
+        )
+        self.ax.fill_between(
+            discharge.t,
+            discharge.mass-discharge.errs,
+            discharge.mass+discharge.errs,
+            alpha=.5, color='#594508'
+        )
+        self.ax.plot(
+            discharge.t, discharge.mass, color='#D8B54D', label='Dynamics'
+        )
+        self.ax.legend(loc='best', frameon=False, framealpha=0)
+        self.ax.set_ylabel('Mass Change (Gt)')
+        self.ax.set_xlabel('Year')
+
+        self.fig.autofmt_xdate()
+        return 'imbie_smb_dynamics'
+
+    @render_plot
+    def discharge_scatter_plot(self, reference: MassChangeDataSeries, data: MassChangeCollection) -> str:
+        for series in data:
+            ref_mass = np.interp(
+                series.t, reference.t, reference.mass
+            )
+            lab = self._group_names[series.user_group]
+            col = style.colours.primary[series.user_group]
+
+            self.ax.scatter(
+                series.mass, ref_mass,
+                marker='o',
+                color=col,
+                label=lab
+            )
+        
+        margin = .05
+
+        min_x, max_x = self.ax.get_xlim()
+        min_y, max_y = self.ax.get_ylim()
+
+        min_ax = min(min_x, min_y)
+        max_ax = max(max_x, max_y)
+        diff = max_ax - min_ax
+
+        min_ax += margin * diff
+        max_ax += margin * diff
+
+        self.ax.plot(
+            [min_ax, max_ax],
+            [min_ax, max_ax],
+            ls='--', c='.3'
+        )
+        self.ax.set_xlim((min_ax, max_ax))
+        self.ax.set_ylim((min_ax, max_ax))
+        
+        self.ax.legend(loc='best', frameon=False, framealpha=0)
+        self.ax.set_ylabel('Reference Discharge (Gt)')
+        self.ax.set_xlabel('Discharge (Gt)')
+        self.ax.set_title('Greenland')
+
+        return "discharge_scatter_plot"
