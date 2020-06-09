@@ -742,26 +742,102 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     # draw plots
     plotter = Plotter(
         filetype=config.plot_format,
-        path=output_path,
-        limits=True
+        path=output_path
     )
-    if len(input_data) == 2:
+    plotter.discharge_scatter_plot(
+        users_discharge_mass.first(),
+        groups_discharge_mass + mean_discharge_mass
+    )
+    plotter.discharge_plot(
+        mean_discharge_mass.smooth(3.083333),
+        groups_discharge_mass.smooth(3.083333),
+        users_discharge_mass.smooth(3.083333)
+    )
+    plotter.discharge_comparison_plot(
+        gris_mass, smb_mass_smooth, mean_discharge_mass.smooth(3.083333)
+    )
+
+    plotter.ais_four_panel_plot(
+        rate_data, regions_rate, regions_mass
+    )
+    plotter.stacked_coverage(
+        rate_data.filter(basin_id=sheets)
+    )
+    plotter.stacked_coverage(
+        rate_data.filter(basin_id=ais_sheets), suffix='ais_only'
+    )
+    plotter.stacked_coverage(
+        rate_data.filter(basin_id=IceSheet.gris), suffix='gris_only'
+    )
+    plotter.windows_comparison(
+            compare_windows(rate_data.filter(basin_id=sheets), 10)
+    )
+    for sheet in sheets:
+        plotter.windows_comparison(
+            compare_windows(rate_data.filter(basin_id=sheet), 10), suffix=sheet.value
+        )
+    plotter.annual_dmdt_bars(rate_data_unsmoothed, regions_rate, external_plot=False, imbie1=config.imbie1_compare)
+    plotter.annual_dmdt_bars(rate_data_unsmoothed, regions_rate, fix_y=True, external_plot=False, imbie1=config.imbie1_compare)
+
+    ref_path = os.path.expanduser('~/imbie/as_gris_comparison.tsv')
+    df = pd.read_csv(ref_path, names=['date', 'dm'])
+    ref_t = df['date'].values
+    ref_dm = df['dm'].values
+    ref_err = np.zeros_like(ref_dm)
+
+    ref_mass = MassChangeDataSeries(None, None, None, BasinGroup.sheets, IceSheet.gris, None, ref_t, None, ref_dm, ref_err)
+    print(ref_mass)
+    ref_mass_col = MassChangeCollection(ref_mass)
+    print(ref_mass_col)
+    ref_dmdt_monthly = ref_mass_col.to_dmdt(
+        truncate=config.truncate_dmdt, window=3.
+    )
+    ref_dmdt = ref_dmdt_monthly.reduce(interval=1., centre=.5)
+    s = ref_dmdt.first()
+
+    df = pd.DataFrame({'dmdt': s.dmdt, 'err': s.errs}, index=s.t)
+    df.to_csv('gourmelen_replacement.csv')
+
+    plotter.annual_dmdt_bars(
+        rate_data_unsmoothed,
+        regions_rate.reduce(1., centre=.5),
+        external_plot=False,
+        sheets=[IceSheet.gris],
+        imbie1=config.imbie1_compare
+    )
+    ordered_names = sorted(names, reverse=True)
+    ais_names = {g.user for g in rate_data.filter(basin_id=ais_sheets)}
+    ordered_ais_names = sorted(ais_names, reverse=True)
+    gris_names = {g.user for g in rate_data.filter(basin_id=IceSheet.gris)}
+    ordered_gris_names = sorted(gris_names, reverse=True)
+
+    plotter.sheets_time_bars(mass_data.filter(basin_id=IceSheet.gris), [IceSheet.gris], ordered_gris_names, suffix="mass_gris")
+    plotter.coverage_combined(
+        mass_data.filter(basin_id=IceSheet.gris), rate_data.filter(basin_id=IceSheet.gris), ordered_gris_names
+    )
+
+    dmdt_comparison_plot = False # disable dM/dt vs recovered dM/dt comparisons
+    if len(input_data) == 2 and dmdt_comparison_plot:
         from functools import partial
         prepare = partial(prepare_collection, config=config)
         data_a, data_b = map(prepare, input_data)
         for sheet in sheets:
             for group in groups:
-                data_a_sel = data_a.filter(user_group=group, basin_id=sheet, user='Shepherd').window_cropped()
-                data_b_sel = data_b.filter(user_group=group, basin_id=sheet, user='Shepherd').window_cropped()
+                data_a_sel = data_a.filter(
+                    user_group=group, basin_id=sheet, user='Shepherd'
+                ).window_cropped()
+                data_b_sel = data_b.filter(
+                    user_group=group, basin_id=sheet, user='Shepherd'
+                ).window_cropped()
 
                 name = "%s_%s" % (group, sheet.value)
                 plotter.named_dmdt_comparison_plot(data_a_sel, data_b_sel, name)
 
     # rignot/zwally comparison
-    for sheet in sheets:
-        plotter.rignot_zwally_comparison(
-            rignot_data+zwally_data, [sheet]
-        )
+    # for sheet in sheets:
+    #     plotter.rignot_zwally_comparison(
+    #         rignot_data+zwally_data, [sheet]
+    #     )
     # error bars (IMBIE1 style plot)
     window = config.bar_plot_min_time, config.bar_plot_max_time
     plotter.sheets_error_bars(
@@ -771,39 +847,120 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         groups_regions_rate.window_cropped(), regions_rate, groups, regions,
         window=window, ylabels=True, suffix="labeled"
     )
+    ais_regions = regions.copy()
+    ais_regions.pop(IceSheet.all)
+    ais_regions.pop(IceSheet.gris)
+    
+    plotter.sheets_error_bars(
+        groups_regions_rate.window_cropped(), regions_rate, groups, ais_regions,
+        window=window, suffix='ais',
+    )
+    plotter.sheets_error_bars(
+        groups_regions_rate.window_cropped(), regions_rate, groups, ais_regions,
+        window=window, ylabels=True, suffix="ais_labeled"
+    )
+    plotter.sheets_error_bars(
+        groups_regions_rate.window_cropped(), regions_rate, groups, [IceSheet.gris],
+        window=window, suffix='gris',
+    )
+    plotter.sheets_error_bars(
+        groups_regions_rate.window_cropped(), regions_rate, groups, [IceSheet.gris],
+        window=window, ylabels=True, suffix="gris_labeled"
+    )
 
     align_dm = offset is None
     # intracomparisons
+
+    imbie1_avgs = WorkingMassRateCollection()
+
+    for sheet, group in product(sheets, groups):
+        alt_avg = rate_data.filter(
+            basin_id=sheet,
+            user_group=group
+        ).average(
+            mode=config.combine_method,
+            error_mode=ErrorMethod.imbie1
+        )
+        imbie1_avgs.add_series(alt_avg)
+
+    if config.truncate_avg:
+        plotter.named_dmdt_all(
+            ais_sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped()
+        )
+        plotter.named_dmdt_all(
+            ais_sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped(),
+            sharex=True
+        )
+        plotter.named_dmdt_all(
+            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped(), suffix='gris'
+        )
+        plotter.named_dmdt_all(
+            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped(), suffix='gris', sharex=True
+        )
+    else:
+        plotter.named_dmdt_all(
+            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            full_dmdt=rate_data_unsmoothed, suffix='gris',
+            flip_grid=False
+        )
+        plotter.named_dmdt_all(
+            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            full_dmdt=rate_data_unsmoothed, suffix='gris',
+            sharex=True, flip_grid=False
+        )
+
+    for i, g in enumerate(groups):
+        plotter.named_dmdt_all(
+            [IceSheet.gris], [g], rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate, full_dmdt=rate_data_unsmoothed, suffix='gris_%s' % g,
+            t_range=(1990, 2020), tag=chr(ord('a')+i)
+        )
+    plotter.named_dmdt_all(
+        [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+        groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+        full_dmdt=rate_data_unsmoothed, suffix='gris_col', flip_grid=True #t_range=(1990, 2020),
+    )
+
+
     for group in groups:
+        group_names = list({s.user for s in rate_data.filter(user_group=group)})
+        group_colors = style.UsersColorCollection(group_names)
+
         plotter.group_rate_boxes(
             rate_data.filter(user_group=group), {s: s for s in sheets}, suffix=group
         )
-        plotter.group_rate_intracomparison(
-            groups_regions_rate.filter(user_group=group).window_cropped().smooth(config.plot_smooth_window),
-            rate_data.filter(user_group=group).window_cropped().smooth(config.plot_smooth_window),
-            regions, suffix=group, mark=config.users_mark
-        )
-        plotter.group_mass_intracomparison(
-            groups_regions_mass.filter(user_group=group),
-            mass_data.filter(user_group=group), regions, suffix=group,
-            mark=config.users_mark, align=align_dm
-        )
-        for sheet in sheets:
-            plotter.named_dmdt_group_plot(
-                sheet, group, rate_data.filter(user_group=group, basin_id=sheet).window_cropped(),
-                groups_regions_rate.filter(user_group=group, basin_id=sheet).window_cropped().first()
-            )
-            plotter.named_dm_group_plot(
-                sheet, group, mass_data.filter(user_group=group, basin_id=sheet),
-                basis=groups_regions_mass.filter(user_group=group, basin_id=sheet).first()
-            )
+        # plotter.group_rate_intracomparison(
+        #     groups_regions_rate.filter(user_group=group).window_cropped().smooth(config.plot_smooth_window),
+        #     rate_data.filter(user_group=group).window_cropped().smooth(config.plot_smooth_window),
+        #     regions, suffix=group, mark=config.users_mark
+        # )
+        # plotter.group_mass_intracomparison(
+        #     groups_regions_mass.filter(user_group=group),
+        #     mass_data.filter(user_group=group), regions, suffix=group,
+        #     mark=config.users_mark, align=align_dm
+        # )
+        # for sheet in sheets:
+        #     plotter.named_dmdt_group_plot(
+        #         sheet, group, rate_data.filter(user_group=group, basin_id=sheet).window_cropped(),
+        #         groups_regions_rate.filter(user_group=group, basin_id=sheet).window_cropped().first()
+        #     )
+        #     plotter.named_dm_group_plot(
+        #         sheet, group, mass_data.filter(user_group=group, basin_id=sheet),
+        #         basis=groups_regions_mass.filter(user_group=group, basin_id=sheet).first()
+        #     )
     # intercomparisons
     for _id, region in regions.items():
         reg = {_id: region}
 
         plotter.groups_rate_intercomparison(
-            regions_rate.window_cropped().smooth(config.plot_smooth_window),
-            groups_regions_rate.smooth(config.plot_smooth_window), reg
+            regions_rate.window_cropped().smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters), reg
         )
         plotter.groups_mass_intercomparison(
             regions_mass, groups_regions_mass, reg, align=align_dm
@@ -811,16 +968,15 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     # region comparisons
     ais_regions = [IceSheet.eais, IceSheet.wais, IceSheet.apis]
     all_regions = [IceSheet.ais, IceSheet.gris, IceSheet.all]
-
-    plotter.regions_mass_intercomparison(
-        regions_mass, *sheets
-    )
-    plotter.regions_mass_intercomparison(
-        regions_mass, *ais_regions
-    )
-    plotter.regions_mass_intercomparison(
-        regions_mass, *all_regions
-    )
+    # plotter.regions_mass_intercomparison(
+    #     regions_mass, *sheets
+    # )
+    # plotter.regions_mass_intercomparison(
+    #     regions_mass, *ais_regions
+    # )
+    # plotter.regions_mass_intercomparison(
+    #     regions_mass, *all_regions
+    # )
 
     if not config.export_data:
         return
