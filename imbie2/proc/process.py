@@ -681,26 +681,60 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
     rat = RegionAveragesTable(
         regions_rate, list(regions.keys()),
-        (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010), (2010, 2017), (1992, 2017),
-        (1992, 1997), (1997, 2002), (2002, 2007), (2007, 2012), (2012, 2017),
+        (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010),
+        (2010, 2017), (1992, 2017), (1992, 1997), (1997, 2002), (2002, 2007),
+        (2007, 2012), (2012, 2017), (2005, 2015),
         style=config.table_format
     )
     filename = os.path.join(output_path, "region_window_averages." + rat.default_extension())
+
+    for region in regions:
+        series = regions_rate.filter(basin_id=region).first()
+        print(region.value,
+              "{:.1f}-{:.1f}".format(series.min_time, series.max_time),
+              "({:.1f})".format(series.max_time-series.min_time))
+
+    print("writing table:", filename)
+    rat.write(filename)
+
+    rat = RegionAveragesTable(
+        regions_rate, [IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.ais],
+        (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010),
+        (2010, 2017), (1992, 2017), (1992, 1997), (1997, 2002), (2002, 2007),
+        (2007, 2012), (2012, 2017), (2005, 2015),
+        style=config.table_format
+    )
+    filename = os.path.join(output_path, "region_window_averages_ais." + rat.default_extension())
 
     print("writing table:", filename)
     rat.write(filename)
 
     rgt = RegionGroupAveragesTable(
-        groups_regions_rate, regions_rate, list(regions.keys()), 2005, 2015, groups, style=config.table_format
+        groups_regions_rate.window_cropped(), regions_rate.window_cropped(),
+        list(regions.keys()), config.bar_plot_min_time, config.bar_plot_max_time, groups,
+        style=config.table_format
     )
     filename = os.path.join(output_path, "region_group_window_averages."+rgt.default_extension())
 
     print("writing table:", filename)
     rgt.write(filename)
 
+    rgt = RegionGroupAveragesTable(
+        groups_regions_rate.window_cropped(), regions_rate.window_cropped(),
+        [IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.ais],
+        config.bar_plot_min_time, config.bar_plot_max_time, groups,
+        style=config.table_format
+    )
+    filename = os.path.join(output_path, "region_group_window_averages_ais."+rgt.default_extension())
+
+    print("writing table:", filename)
+    rgt.write(filename)
+
     for group in groups:
         tct = TimeCoverageTable(rate_data.filter(user_group=group), style=config.table_format)
-        filename = os.path.join(output_path, "time_coverage_" + group + "." + tct.default_extension())
+        filename = os.path.join(
+            output_path, "time_coverage_" + group + "." + tct.default_extension()
+        )
 
         print("writing table:", filename)
         tct.write(filename)
