@@ -12,6 +12,9 @@ from imbie2.const.error_methods import ErrorMethod
 from imbie2.const.table_formats import TableFormat
 from imbie2.const.lsq_methods import LSQMethod
 
+import matplotlib.pyplot as plt
+format_opts = list(plt.gcf().canvas.get_supported_filetypes().keys())
+
 
 class ConfigFile:
 
@@ -68,7 +71,7 @@ class ImbieConfig(ConfigFile):
     input_path = ConfigParam("input_path", str)
     output_path = ConfigParam("output_path", str)
 
-    plot_format = ConfigParam("plot_format", str, options=["png", "jpg", "svg", "pdf"], optional=True)
+    plot_format = ConfigParam("plot_format", str, options=format_opts, optional=True)
     table_format = ConfigParam("table_format", TableFormat, default=TableFormat.fancy)
 
     start_date = ConfigParam("start_date", float, optional=True)
