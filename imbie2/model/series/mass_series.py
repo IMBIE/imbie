@@ -62,6 +62,60 @@ class MassChangeDataSeries(DataSeries):
         # self.a = self.a[ok[:len(self.a)]]
         self.errs = self.errs[ok]
 
+    def reduce(self, interval: float=1., centre=None):
+        mean_diff = np.mean(np.diff(self.t))
+        if mean_diff >= interval:
+            return self
+
+        breaks = np.hstack(([0], np.argwhere(np.isnan(self.mass)).flat, [-1]))
+        all_windows_mass = []
+        all_windows_errs = []
+        all_windows_t = []
+
+        for start, final in zip(breaks[:-1], breaks[1:]):
+            if start + 1 == final:
+                continue
+
+            is_last = (final == -1)
+
+            min_t = self.t[start]
+            max_t = self.t[final]
+            half_i = interval / 2.
+
+            if centre is None:
+                t_new = np.arange(min_t+half_i, max_t-half_i, interval)
+                t_new = np.hstack((t_new, [max_t-half_i]))
+            else:
+                t_new = np.arange(
+                    np.floor(min_t) - centre, np.ceil(max_t) + centre, interval
+                )
+                t_new = t_new[(t_new > min_t) & (t_new < max_t)]
+
+            window_mass = np.interp(t_new, self.t, self.mass)
+            window_errs = np.interp(t_new, self.t, self.errs)
+            window_t = t_new
+
+            if not is_last:
+                # add extra NaN record to create break
+                window_mass = np.hstack((window_mass, [np.nan]))
+                window_errs = np.hstack((window_errs, [np.nan]))
+                window_t = np.hstack((window_t, [max_t+half_i]))
+                
+            all_windows_mass.append(window_mass)
+            all_windows_errs.append(window_errs)
+            all_windows_t.append(window_t)
+
+        mass = np.hstack(all_windows_mass)
+        errs = np.hstack(all_windows_errs)
+        t_new = np.hstack(all_windows_t)
+
+        a = np.empty_like(t_new) * np.nan
+
+        return MassChangeDataSeries(
+            self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
+            t_new, a, mass, errs, self.computed, self.merged, self.aggregated, self.contributions, interpolate=False
+        )
+
     @classmethod
     def accumulate_mass(cls, rate_data, offset: float=None, ref_series: "MassChangeDataSeries"=None)\
             -> "MassChangeDataSeries":
