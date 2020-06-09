@@ -37,11 +37,6 @@ class MassChangeDataSeries(DataSeries):
             self.errs = errs
             
         self.a = area
-        _, self.errs = ts2m(time, errs)
-        # self.t = time
-        # self.mass = mass
-        # self.errs = errs
-        # self.a = area
 
     def _get_min_time(self) -> float:
         return np.min(self.t)
