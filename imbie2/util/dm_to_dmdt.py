@@ -90,15 +90,19 @@ def dm_to_dmdt(t: np.ndarray, dm: np.ndarray, sigma_dm: np.ndarray, wsize: float
         ).T
 
         if lsq_method == LSQMethod.regress:
-            raise NotImplemented()
+            raise NotImplementedError()
         elif lsq_method == LSQMethod.normal:
             lsq_coef, lsq_se = lscov(lsq_fit, window_dm, dx=True)
         elif lsq_method == LSQMethod.weighted:
             w = np.diag(1. / np.square(window_sigma_dm))
             lsq_coef, lsq_se = lscov(lsq_fit, window_dm, w, dx=True)
 
+        avg_window_sigma = np.sqrt(np.nanmean(window_sigma_dm ** 2.))
+
         dmdt[i] = lsq_coef[1]
-        sigma_dmdt[i] = lsq_se[1]
+        sigma_dmdt[i] = np.sqrt(
+            lsq_se[1] ** 2 + avg_window_sigma ** 2
+        )
 
         model_fit_t[i] = np.r_[wmin:wmax:.2]
         model_fit_dm[i] = lsq_coef[0] + lsq_coef[1] * model_fit_t[i]
