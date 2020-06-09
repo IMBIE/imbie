@@ -712,6 +712,194 @@ class Plotter:
         return name, leg_style
 
     @render_plot
+    def coverage_combined(self, stack_data, coverage_data, names):
+        """
+        """
+        self.fig, axs = plt.subplots(nrows=2)
+        self.fig.set_size_inches(9, 32)
+
+        # named coverage plot
+        groups = ["RA", "GMB", "IOM"]
+        self.labels = [self._group_names[g] for g in groups]
+        self.glyphs = [self.group_glyph(g) for g in groups]
+            
+        axs[0].text(
+            .05, .95, 'a',
+            horizontalalignment='left',
+            verticalalignment='top',
+            transform=axs[0].transAxes
+        )
+
+        min_t = {}
+        max_t = {}
+        group = {}
+        bsets = {}
+
+        for series in coverage_data:
+            u = series.user
+            g = series.user_group
+
+            min_t[u] = series.min_time
+            max_t[u] = series.max_time
+            if u not in bsets:
+                bsets[u] = [series.basin_group]
+            else:
+                bsets[u].append(series.basin_group)
+            group[u] = g
+
+            order = []
+            width = []
+            start = []
+            color = []
+
+        for j, u in enumerate(names):
+            if u not in group:
+                continue
+            g = group[u]
+            c = style.colours.primary[g]
+
+            t0 = min_t[u]
+            t1 = max_t[u]
+
+            order.append(j-.4)
+            width.append(t1 - t0)
+            start.append(t0)
+            color.append(c)
+
+        axs[0].barh(order, width, height=.8, left=start, color=color)
+        axs[0].set_xlim(self._time0, self._time1)
+        axs[0].set_xticks([1995, 2005, 2015])
+
+        axs[0].set_yticks([i for i, _ in enumerate(names)])
+        axs[0].set_yticklabels(names)
+        axs[1].text(
+            .05, .95, 'b',
+            horizontalalignment='left',
+            verticalalignment='top',
+            transform=axs[1].transAxes
+        )
+
+        order = ['IOM', 'RA', 'GMB']
+        users = {series.user for series in stack_data}
+        xs = []
+        for user in users:
+            user_data = stack_data.filter(user=user)
+            min_time = min(series.min_time for series in user_data)
+            max_time = max(series.max_time for series in user_data)
+            xs.extend([min_time-.01, min_time+.01,
+                       max_time-.01, max_time+.01])
+        xs.sort()
+        xs = np.asarray(xs, dtype=float)
+
+        counts = {}
+        for g in order:
+            counts[g] = np.zeros(xs.shape, dtype=int)
+
+        for user in users:
+            user_data = stack_data.filter(user=user)
+            min_time = min(series.min_time for series in user_data)
+            max_time = max(series.max_time for series in user_data)
+
+            ok = np.logical_and(
+                xs > min_time,
+                xs < max_time
+            )
+            counts[user_data.first().user_group][ok] += 1
+
+        for g in order:
+            self.labels.append(
+                self._group_names[g]
+            )
+            self.glyphs.append(
+                self.group_glyph(g)
+            )
+        axs[1].stackplot(
+            xs, [counts[g] for g in order],
+            colors=[style.primary[g] for g in order],
+            alpha=.5
+        )
+
+        return "coverage_combined"
+
+    @render_plot
+    def windows_comparison(self, data: Sequence[WindowStats], suffix: str=None):
+        """
+        stacked bar plot of number of submissions per time window
+        """
+        prev = [0 for _ in data]
+        xs = np.arange(len(data))
+        names = [
+            "{}-\n{}".format(s.start, s.end) for s in data
+        ]
+
+        for group in "RA", "GMB", "IOM":
+            counts = [s.groups[group] for s in data]
+            self.ax.bar(
+                xs, counts, .35, bottom=prev,
+                color=style.primary[group]
+            )
+            prev = [p+c for p, c in zip(prev, counts)]
+
+        self.ax.set_xticks(xs)
+        self.ax.set_xticklabels(names)
+        self.ax.set_title("Data coverage per window")
+        self.ax.set_xlabel("window")
+        self.ax.set_ylabel("contributions")
+
+        if suffix is None:
+            suffix = ""
+        else:
+            suffix = "_" + suffix
+        return "windows_comparison" + suffix
+
+    @render_plot_with_legend
+    def stacked_coverage(self, data: Union[WorkingMassRateCollection, MassChangeCollection], suffix: str=None):
+        """
+        stacked area plot of number of submissions over time
+        """
+        xs = []
+        users = {series.user for series in data}
+        for user in users:
+            user_data = data.filter(user=user)
+            min_time = min(series.min_time for series in user_data)
+            max_time = max(series.max_time for series in user_data)
+            xs.extend([min_time-.01, min_time+.01,
+                       max_time-.01, max_time+.01])
+        xs.sort()
+        xs = np.asarray(xs, dtype=float)
+
+        counts = {}
+        for g in 'GMB', 'RA', 'IOM':
+            counts[g] = np.zeros(xs.shape, dtype=int)
+        for user in users:
+            user_data = data.filter(user=user)
+            min_time = min(series.min_time for series in user_data)
+            max_time = max(series.max_time for series in user_data)
+
+            ok = np.logical_and(
+                xs > min_time,
+                xs < max_time
+            )
+            counts[user_data.first().user_group][ok] += 1
+
+        for g in 'IOM', 'RA', 'GMB':
+            self.labels.append(
+                self._group_names[g]
+            )
+            self.glyphs.append(
+                self.group_glyph(g)
+            )
+        self.ax.stackplot(xs, [counts[g] for g in ['IOM', 'RA', 'GMB']],
+                          colors=[style.primary[g] for g in ['IOM', 'RA', 'GMB']],
+                          alpha=.5)
+
+        name = "stacked_coverage"
+        if suffix is not None:
+            name += "_"+suffix
+
+        return name, dict(loc='top left', frameon=False, framealpha=0)
+
+    @render_plot
     def group_rate_boxes(self, rate_data: WorkingMassRateCollection, regions, suffix: str=None):
         plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
 
