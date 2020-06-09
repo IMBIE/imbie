@@ -650,14 +650,15 @@ class Plotter:
                 y1 = mean - err
                 y2 = mean + err
 
-                self.ax.plot(
-                    [jx, jx], [y1, y2],
-                    linewidth=10,
-                    color=style.colours.primary[method]
-                    # marker='_'
+                self.ax.errorbar(
+                    [jx], [mean], yerr=[err],
+                    color=style.colours.primary[method],
+                    linewidth=10, capsize=0
                 )
-                if y1 < min_y: min_y = y1
-                if y2 > max_y: max_y = y2
+                if y1 < min_y:
+                    min_y = y1
+                if y2 > max_y:
+                    max_y = y2
         # add legend
         for group in methods:
             self.glyphs.append(
@@ -675,26 +676,40 @@ class Plotter:
 
         self.ax.set_xticks(ticks)
         self.ax.set_xticklabels(names)
-        # turn on minor ticks (both axes), then disable x-axis minor ticks
-        # self.ax.minorticks_on()
-        # self.ax.tick_params(axis='x', which='minor', top='off')
-        if not ylabels:
-            self.ax.tick_params(
-                axis='y', which='both', left='off', labelleft='off', right='off')
-        else:
-            plt.ylabel("dM/dt (Gt/yr)")
-
         self.ax.set_xlim(-.5, max_x-.5)
         self.ax.set_ylim(min_y - y_margin, max_y + y_margin)
 
-        # plt.ylabel("Mass Balance (Gt/yr)", fontweight='bold')
+        if not ylabels:
+            self.ax.tick_params(
+                axis='y', which='both', left='off', labelleft='off', right='off')
+            ax2 = None
+        else:
+            plt.ylabel("dM/dt (Gt $\mathregular{yr^{-1}}$)")
+            ax2 = self.ax.twinx()
+            _min, _max = self.ax.get_ylim()
+            lims = _min / -360, _max / -360
+            ax2.set_ylim(lims)
+            ax2.set_ylabel('Sea Level Contribution (mm $\mathregular{yr^{-1}}$)')
+
         plt.xlabel("Ice Sheet", fontweight='bold')
-        self.fig.set_size_inches(16, 9)
+        width = max(6, 4*len(sheets))
+        self.fig.set_size_inches(width, 9)
 
         name = "sheets_error_bars"
         if suffix is not None:
             name += "_" + suffix
-        return name, {'frameon': False}
+
+        if len(sheets) == 1:
+            leg_style = dict(
+                loc='lower center', parent='fig', frameon=False
+            )
+            box = self.ax.get_position()
+            self.ax.set_position([box.x0, box.y0+box.height*.25, box.width, box.height*.75])
+            if ax2 is not None:
+                ax2.set_position([box.x0, box.y0+box.height*.25, box.width, box.height*.75])
+        else:
+            leg_style = dict(frameon=False)
+        return name, leg_style
 
     @render_plot
     def group_rate_boxes(self, rate_data: WorkingMassRateCollection, regions, suffix: str=None):
