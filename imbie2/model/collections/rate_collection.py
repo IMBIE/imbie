@@ -206,3 +206,58 @@ class WorkingMassRateCollection(Collection):
     def __iadd__(self, other: "WorkingMassRateCollection") -> "WorkingMassRateCollection":
         self.series += other.series
         return self
+
+    def get_window(self, min_time: float, max_time: float, interp: bool=True) -> "WorkingMassRateCollection":
+        assert min_time < max_time
+
+        return WorkingMassRateCollection(
+            *[s.truncate(min_time, max_time, interp=interp) for s in self if
+                np.any(s.t < max_time) and np.any(s.t > min_time)]
+        )
+
+    def common_period(self):
+        cp_beg = np.max([s.min_time for s in self])
+        cp_end = np.min([s.max_time for s in self])
+
+        if cp_end < cp_beg:
+            return None, None
+        return cp_beg, cp_end
+
+    def min_rate(self) -> float:
+        return np.min([s.min_rate for s in self])
+    
+    def max_rate(self) -> float:
+        return np.max([s.max_rate for s in self])
+    
+    def min_error(self) -> float:
+        return np.min([s.min_error for s in self])
+    
+    def max_error(self) -> float:
+        return np.max([s.max_error for s in self])
+
+    def min_rate_time(self) -> float:
+        min_s = None
+        for s in self:
+            if min_s is None:
+                min_s = s
+                continue
+            if s.min_rate < min_s.min_rate:
+                min_s = s
+        
+        return s.min_rate_time()
+    
+    def max_rate_time(self) -> float:
+        max_s = None
+        for s in self:
+            if max_s is None:
+                max_s = s
+                continue
+            if s.max_rate < max_s.max_rate:
+                max_s = s
+        
+        return s.max_rate_time()
+
+    def stdev(self) -> float:
+        return np.nanstd(
+            np.hstack([s.dmdt for s in self.series])
+        )
