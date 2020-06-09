@@ -1083,7 +1083,7 @@ class Plotter:
             self.ax = plt.subplot(plt_shape+i+1)
             self.ax.axhline(0, ls='--', color='k')
 
-            avg = group_avgs.filter(basin_id=name).average()
+            avg = group_avgs.filter(basin_id=name).first()
             if avg is None:
                 print(name)
                 continue
