@@ -245,7 +245,7 @@ class Plotter:
         return mpatches.Patch(color=colour, label=label, **kwargs)
 
     @render_plot_with_legend
-    def sheets_time_bars(self, data, sheets, names, *groups):
+    def sheets_time_bars(self, data, sheets, names, *groups, suffix: str=None):
         if not groups:
             groups = ["RA", "GMB", "IOM"]
         num_sheets = len(sheets)
@@ -258,6 +258,7 @@ class Plotter:
         yticklabels = None
         for i, sheet in enumerate(sheets):
             plt_loc = plt_dims + i + 1
+
             if prev is None:
                 ax = plt.subplot(plt_loc)
                 prev = ax
@@ -267,13 +268,21 @@ class Plotter:
                     yticklabels = ax.get_yticklabels()
                 else:
                     yticklabels += ax.get_yticklabels()
+            
+            label = chr(ord('a') + i)
+            ax.text(
+                .05, .95, label,
+                horizontalalignment='left',
+                verticalalignment='top',
+                transform=ax.transAxes
+            )
 
             min_t = {}
             max_t = {}
             group = {}
             bsets = {}
 
-            for series in data[sheet]:
+            for series in data.filter(basin_id=sheet):
                 u = series.user
                 g = series.user_group
 
@@ -311,12 +320,17 @@ class Plotter:
 
         prev.set_yticks([i for i, _ in enumerate(names)])
         prev.set_yticklabels(names)
-        plt.setp(yticklabels, visible=False)
+        if yticklabels is not None:
+            plt.setp(yticklabels, visible=False)
 
         leg_params = {'loc': 'lower center', 'ncol': 3, 'parent': 'fig'}
-                      # {'loc': 4, 'frameon': False}
-        self.fig.set_size_inches(16, 9)
+        width = max(6, 4*len(sheets))
+        self.fig.set_size_inches(width, 9)
         sheet_names = "_".join(s.value for s in sheets)
+        
+        mpl.rc('font', size=12)
+        if suffix is not None:
+            sheet_names += "_" + suffix
         return "sheets_time_bars_"+sheet_names, leg_params
 
     @render_plot_with_legend
