@@ -4,6 +4,7 @@ from imbie2.const.average_methods import AverageMethod
 from imbie2.model.series import WorkingMassRateDataSeries, MassRateDataSeries
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.util.sum_series import sum_series
+from imbie2.util.functions import match
 import imbie2.model as model
 
 from typing import Iterator
@@ -50,7 +51,7 @@ class WorkingMassRateCollection(Collection):
         return super().__iter__()
 
     def average(self, mode: AverageMethod=AverageMethod.equal_groups, nsigma: float=None,
-                error_mode: ErrorMethod=None, export_data: str=None) -> WorkingMassRateDataSeries:
+                error_mode: ErrorMethod=ErrorMethod.rss, export_data: str=None) -> WorkingMassRateDataSeries:
         if not self.series:
             return None
         elif len(self.series) == 1:
@@ -91,11 +92,40 @@ class WorkingMassRateCollection(Collection):
             raise ValueError("Unknown averaging mode: \"{}\"".format(mode))
 
         t, m = ts_combine(ts, ms, w=w, nsigma=nsigma)
-        _, e = ts_combine(ts, es, nsigma=nsigma, error_method=error_mode)
+
+        if error_mode in [ErrorMethod.rms_deviation, ErrorMethod.rss_dev_epoch, ErrorMethod.constant_dev, ErrorMethod.max_error]:
+            # calculate RMS of difference between contributions
+            #  and mean at each epoch
+            devs = np.empty((len(self), t.size)) * np.nan
+
+            for i, s in enumerate(self):
+                i_m, i_s = match(t, s.t, 1./48)
+                devs[i, i_m] = s.dmdt[i_s] - m[i_m]
+
+            e = np.sqrt(np.nanmean(np.square(devs), axis=0))
+
+            all_members = np.isfinite(np.product(devs, axis=0)) # find epochs w/o nan in 'devs'
+            const_e = np.ones_like(e) * np.mean(e[all_members]) # get constant value
+
+            if error_mode == ErrorMethod.constant_dev:
+                e = const_e
+            elif error_mode == ErrorMethod.rss_dev_epoch:
+                _, rms_e = ts_combine(ts, es, nsigma=nsigma, error_method=ErrorMethod.rms)
+                sqr_error = np.vstack([rms_e, const_e]) ** 2.
+                e = np.sqrt(np.sum(sqr_error, axis=0))
+            elif error_mode == ErrorMethod.max_error:
+                _, rms_e = ts_combine(ts, es, nsigma=nsigma, error_method=ErrorMethod.rms) # FIXME: change to RMS
+                both = np.vstack([e, rms_e])
+                e = np.max(both, axis=0)
+        else:
+            _, e = ts_combine(ts, es, nsigma=nsigma, error_method=error_mode)
+
+        print(t.size, m.size, e.size, error_mode)
+        trunc = self.get_truncation_margins()
 
         return WorkingMassRateDataSeries(
             None, u_gp, d_gp, b_gp, b_id, b_a, t, None, m, e,
-            contributions=count
+            contributions=count, truncate=trunc
         )
 
     def sum(self, error_method=ErrorMethod.sum) -> WorkingMassRateDataSeries:
