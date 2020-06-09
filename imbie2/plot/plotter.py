@@ -1460,6 +1460,7 @@ class Plotter:
     def named_dm_group_plot(self, region: IceSheet, group: str, data: MassChangeCollection,
                             basis: MassChangeDataSeries=None):
         data = data.filter(user_group=group, basin_id=region)
+        self.ax.axhline(0, ls='--', color='k')
 
         colormap = plt.cm.nipy_spectral
         colorcycle = cycler('color', [colormap(i) for i in np.linspace(0, 1, len(data))])
