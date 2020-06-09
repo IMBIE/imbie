@@ -102,12 +102,18 @@ class ImbieConfig(ConfigFile):
     dmdt_window = ConfigParam("dmdt_window", float, default=1.)
     dmdt_method = ConfigParam("dmdt_method", LSQMethod, default=LSQMethod.normal)
     truncate_dmdt = ConfigParam("truncate_dmdt", bool, default=True)
+    truncate_avg = ConfigParam("truncate_avg", bool, default=False)
+    apply_dmdt_smoothing = ConfigParam('apply_dmdt_smoothing', bool, default=True)
 
     reduce_window = ConfigParam("reduce_window", float, optional=True)
     data_smoothing_window = ConfigParam("data_smoothing_window", float, optional=True)
     data_smoothing_iters = ConfigParam("data_smoothing_iters", int, optional=True)
     export_smoothing_window = ConfigParam("export_smoothing_window", float, optional=True)
     export_smoothing_iters = ConfigParam("export_smoothing_iters", int, optional=True)
+    imbie1_compare = ConfigParam("imbie1_compare", bool, default=True)
+
+    output_timestep = ConfigParam("output_timestep", float, optional=True)
+    output_offset = ConfigParam("output_offset", float, optional=True)
 
     def read(self, fileobj) -> None:
         super().read(fileobj)

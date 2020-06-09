@@ -981,9 +981,44 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     if not config.export_data:
         return
 
+    if config.export_smoothing_window is not None:
+        groups_regions_rate = groups_regions_rate.smooth(
+            config.export_smoothing_window, iters=config.export_smoothing_iters
+        )
+        regions_rate = regions_rate.smooth(
+            config.export_smoothing_window, iters=config.export_smoothing_iters
+        )
+
     # write data to files
+
     for region in regions:
+        groups_data = groups_regions_rate.filter(basin_id=region)
+
+        folder = os.path.join(output_path, "groups_dmdt")
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        fname = os.path.join(folder, region.value + ".csv")
+
+        with open(fname, 'w') as f:
+            for series in groups_data:
+                if config.output_timestep is not None:
+                    series = series.reduce(
+                        interval=config.output_timestep,
+                        centre=config.output_offset,
+                        interp=True
+                    )
+                for line in zip(series.t, series.dmdt, series.errs):
+                    line = series.user_group + ", " + series.basin_id.value + ", " + ", ".join(map(str, line)) + "\n"
+                    f.write(line)
+
         data = regions_rate.filter(basin_id=region).first()
+        if config.output_timestep is not None:
+            data = data.reduce(
+                interval=config.output_timestep,
+                centre=config.output_offset
+            )
+
         fname = os.path.join(output_path, region.value+".csv")
 
         print("exporting data:", fname, end="... ")
@@ -992,3 +1027,169 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
                 line = ", ".join(map(str, line)) + "\n"
                 f.write(line)
         print("done.")
+
+        data = regions_mass.filter(basin_id=region).first()
+        if config.output_timestep is not None:
+            data = data.reduce(
+                interval=config.output_timestep,
+                centre=config.output_offset
+            )
+
+        fname = os.path.join(output_path, region.value+"_dm.csv")
+
+        print("exporting data:", fname, end="... ")
+        with open(fname, 'w') as f:
+            for line in zip(data.t, data.mass, data.errs):
+                line = ", ".join(map(str, line)) + "\n"
+                f.write(line)
+        print("done.")
+
+    gris_data = rate_data.filter(basin_id=IceSheet.gris)
+    gris_avg = regions_rate.filter(basin_id=IceSheet.gris).first()
+    
+    for wend in range(2010, 2016):
+        g = gris_data.get_window(2005, wend+1)
+        print('%i-%i:' % (2005, wend), '%i/%i,' %(len(g), len(gris_data)), end=' ')
+        
+        for gris_grp in groups_regions_rate.filter(basin_id=IceSheet.gris):
+            gris_grp_w = gris_grp.truncate(2005, wend+1)
+            print('%s:' % gris_grp_w.user_group, '%.2f,' % gris_grp_w.mean, '%.2f,' % gris_grp_w.sigma, end=' ')
+        
+        avg_w = gris_avg.truncate(2005, wend+1)
+        print('AVG:', '%.2f,' % avg_w.mean, '%.2f' % avg_w.sigma)
+
+    groups_gris = groups_regions_rate.filter(basin_id=IceSheet.gris)
+
+    for g in groups:
+        t, g_sig1, tot = count_tolerance(
+            gris_data.filter(user_group=g),
+            groups_gris.filter(user_group=g).first(),
+            1
+        )
+        _, g_sig2, _ = count_tolerance(
+            gris_data.filter(user_group=g),
+            groups_gris.filter(user_group=g).first(),
+            2
+        )
+        _, g_sig3, _ = count_tolerance(
+            gris_data.filter(user_group=g),
+            groups_gris.filter(user_group=g).first(),
+            3
+        )
+        ok = tot > 0
+        sig1_avg = np.mean(g_sig1[ok] / tot[ok])
+        sig2_avg = np.mean(g_sig2[ok] / tot[ok])
+        sig3_avg = np.mean(g_sig3[ok] / tot[ok])
+        avg_epochs = np.sum(ok)
+
+        tot = np.append(tot, avg_epochs)
+        g_sig1 = np.append(g_sig1, sig1_avg)
+        g_sig2 = np.append(g_sig2, sig2_avg)
+        g_sig3 = np.append(g_sig3, sig3_avg)
+        t = np.append(t, 'average')
+
+        df = pd.DataFrame(
+            data={
+                'total': pd.Series(tot, index=t),
+                'sigma1': pd.Series(g_sig1, index=t),
+                'sigma2': pd.Series(g_sig2, index=t),
+                'sigma3': pd.Series(g_sig3, index=t)
+            }
+        )
+        df.to_csv(os.path.join(output_path, 'gris_dmdt_tolerances_%s.csv' % g))
+
+    t, g_sig1, tot = count_tolerance(
+        gris_data, gris_avg, 1
+    )
+    _, g_sig2, _ = count_tolerance(
+        gris_data, gris_avg, 2
+    )
+    _, g_sig3, _ = count_tolerance(
+        gris_data, gris_avg, 3
+    )
+    ok = tot > 0
+    sig1_avg = np.mean(g_sig1[ok] / tot[ok])
+    sig2_avg = np.mean(g_sig2[ok] / tot[ok])
+    sig3_avg = np.mean(g_sig3[ok] / tot[ok])
+    avg_epochs = np.sum(ok)
+
+    tot = np.append(tot, avg_epochs)
+    g_sig1 = np.append(g_sig1, sig1_avg)
+    g_sig2 = np.append(g_sig2, sig2_avg)
+    g_sig3 = np.append(g_sig3, sig3_avg)
+    t = np.append(t, 'average')
+    
+    df = pd.DataFrame(
+        data={
+            'total': pd.Series(tot, index=t),
+            'sigma1': pd.Series(g_sig1, index=t),
+            'sigma2': pd.Series(g_sig2, index=t),
+            'sigma3': pd.Series(g_sig3, index=t)
+        }
+    )
+    df.to_csv(os.path.join(output_path, 'gris_dmdt_tolerances_all.csv'))
+
+    # produce extended data table 3
+
+    data_window = rate_data.filter(
+        basin_id=IceSheet.gris
+    ).get_window(
+        config.bar_plot_min_time, config.bar_plot_max_time, interp=False
+    )
+
+    avgs_window = groups_regions_rate.filter(
+        basin_id=IceSheet.gris
+    ).get_window(
+        config.bar_plot_min_time, config.bar_plot_max_time, interp=False
+    )
+
+    xavg_window = regions_rate.filter(
+        basin_id=IceSheet.gris
+    ).get_window(
+        config.bar_plot_min_time, config.bar_plot_max_time, interp=False
+    )
+
+    tab_groups = groups + ['ALL']
+    tab_group_names = {
+        'RA': 'Altimetry',
+        'GMB': 'Gravimetry',
+        'IOM': 'Input/Output Method',
+        'ALL': 'All'
+    }
+
+    fpath = os.path.join(config.output_path, 'ext_table_3.csv')
+    with open(fpath, 'w') as f:
+        f.write('Technique,Mass balance (Gt/yr),s.d. (Gt/yr),Range (Gt/yr)\n')
+
+        for g in tab_groups:
+            name = tab_group_names[g]
+
+            if g == 'ALL':
+                group_data = data_window
+                avg = xavg_window.first()
+            else:
+                group_data = data_window.filter(user_group=g)
+                avg = avgs_window.filter(user_group=g).first()
+
+            grid = np.empty((avg.t.size, len(group_data))) * np.nan
+
+            for i, s in enumerate(group_data):
+                s_dmdt = np.interp(avg.t, s.t, s.dmdt, left=np.nan, right=np.nan)
+                grid[:, i] = s_dmdt
+
+            print('epochs:', avg.t.size, 'members:', len(group_data))
+            print(np.nanmax(grid, axis=1).shape)
+
+            group_range = np.nanmean(
+                np.nanmax(grid, axis=1) - np.nanmin(grid, axis=1)
+            )
+            group_sd = np.nanmean(
+                np.nanstd(grid, axis=1)
+            )
+
+            line = [
+                name,
+                '%.2f +/- %.2f' % (avg.mean, avg.sigma),
+                '%.2f' % group_sd, '%.2f' % group_range
+            ]
+            f.write(','.join(line) + '\n')
