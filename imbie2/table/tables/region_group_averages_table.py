@@ -24,7 +24,7 @@ class RegionGroupAveragesTable(Table):
         self.max_date = max_date
 
         for group in groups:
-            name = "{} mass balance (Gt/yr)".format(group)
+            name = "{} mass balance (Gt/yr)".format('MB' if group == 'IOM' else group)
             self.add_auto_column(name, self._get_group_values(group))
         self.add_auto_column("Average mass balance (Gt/yr)", self._get_cross_values)
 

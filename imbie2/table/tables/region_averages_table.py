@@ -21,7 +21,7 @@ class RegionAveragesTable(Table):
         self.add_primary_column("Region", "basin_id", regions)
 
         for start, end in times:
-            col_name = "{}-{}\n(Gt/year)".format(start, end)
+            col_name = "{}-{}\n(Gt/year)".format(int(start), int(end))
             self.add_auto_column(col_name, self._get_time_data(start, end))
 
         self.generate(data)
@@ -32,8 +32,8 @@ class RegionAveragesTable(Table):
     @staticmethod
     def _get_time_data(start: float, end: float) -> Callable:
         def func(data: WorkingMassRateCollection) -> str:
-            series = data.first().truncate(start, end)
-            return "{:.0f} \u00B1 {:.0f}".format(series.mean, series.sigma)
+            series = data.first().truncate(start, end, interp=False)
+            return "{:.2f} \u00B1 {:.2f}".format(series.mean, series.sigma)
 
         return func
 
