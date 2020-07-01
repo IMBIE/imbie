@@ -367,251 +367,195 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     gris_rate = regions_rate.filter(basin_id=IceSheet.gris).first()
     gris_mass = regions_mass.filter(basin_id=IceSheet.gris).first()
     # - read SMB data
-    smb_fname = 'smb_anom_1980_2019_v2.csv'
-    smb_fpath = os.path.join('/home/mark/imbie', smb_fname) # '/media/mark/isardSAT/imbie'
-    smb_data = pd.read_csv(
-        smb_fpath,
-        names=['year', 'smb', 'err'],
-        index_col='year'
-    )
-    smb_t = smb_data.index.values
-    smb_rate = smb_data.smb.values * 12.
-    smb_rate_err = smb_data.err.values * 12.
-
-    smb_rate_series = WorkingMassRateDataSeries(
-        'SMB', 'SMB', 'SMB', BasinGroup.sheets, IceSheet.gris,
-        np.nan, smb_t, np.ones(smb_t.shape) * np.nan, smb_rate,
-        smb_rate_err
-    ).reduce(1, .45, backfill=True)
-    smb_t12, smb_dmdt12 = ts2m(smb_rate_series.t, smb_rate_series.dmdt)
-    _, smb_errs12 = ts2m(smb_rate_series.t, smb_rate_series.errs)
-
-    smb_rate_series = WorkingMassRateDataSeries(
-        'SMB', 'SMB', 'SMB', BasinGroup.sheets, IceSheet.gris,
-        np.nan, smb_t12, np.ones(smb_t.shape) * np.nan, smb_dmdt12,
-        smb_errs12
-    )
-    smb_mass_series = smb_rate_series.integrate()
-    smb_mass_smooth = smb_rate_series.smooth(3.083333).integrate()
-
-    groups_discharge_rate = WorkingMassRateCollection()
-    mean_discharge_rate = calculate_discharge(gris_rate, smb_rate_series)
-    mean_discharge_rate.user_group = 'all'
-
-    for group in groups:
-        series = groups_regions_rate.filter(
-            basin_id=IceSheet.gris, user_group=group
-        ).first()
-
-        print(group, series)
-
-        if series is None:
-            continue
-
-        groups_discharge_rate.add_series(
-            calculate_discharge(series, smb_rate_series)
-        )    
-    mouginot_data = pd.read_csv(
-        '~/imbie/mouginot_discharge.tsv',
-        names=['year', 'discharge', 'error'],
-        index_col='year'
-    )
-    mouginot_t = np.asarray(
-        mouginot_data.index.values, dtype=np.float)
-    mouginot_mass = np.asarray(
-        mouginot_data.discharge.values, dtype=np.float)
-    mouginot_errs = np.asarray(
-        mouginot_data.error.values, dtype=np.float)
-
-    users_discharge_mass = MassChangeCollection(
-        MassChangeDataSeries(
-            'Mouginot', 'IOM', 'IOM', BasinGroup.sheets, IceSheet.gris, np.nan,
-            mouginot_t, mouginot_t*np.nan, mouginot_mass, mouginot_errs
+    if config.smb_data_path is not None:
+        smb_data = pd.read_csv(
+            config.smb_data_path,
+            names=['year', 'smb', 'err'],
+            index_col='year'
         )
-    )
-    mean_discharge_mass = mean_discharge_rate.integrate() # smooth(3.083333)
-    groups_discharge_mass = groups_discharge_rate.integrate( # smooth(3.083333)
-        align=mean_discharge_mass
-    )
+        smb_t = smb_data.index.values
+        smb_rate = smb_data.smb.values * 12.
+        smb_rate_err = smb_data.err.values * 12.
 
-    print('group discharge:', len(groups_discharge_rate), len(groups_discharge_mass))
+        smb_rate_series = WorkingMassRateDataSeries(
+            'SMB', 'SMB', 'SMB', BasinGroup.sheets, IceSheet.gris,
+            np.nan, smb_t, np.ones(smb_t.shape) * np.nan, smb_rate,
+            smb_rate_err
+        ).reduce(1, .45, backfill=True)
+        smb_t12, smb_dmdt12 = ts2m(smb_rate_series.t, smb_rate_series.dmdt)
+        _, smb_errs12 = ts2m(smb_rate_series.t, smb_rate_series.errs)
+
+        smb_rate_series = WorkingMassRateDataSeries(
+            'SMB', 'SMB', 'SMB', BasinGroup.sheets, IceSheet.gris,
+            np.nan, smb_t12, np.ones(smb_t.shape) * np.nan, smb_dmdt12,
+            smb_errs12
+        )
+        smb_mass_series = smb_rate_series.integrate()
+        smb_mass_smooth = smb_rate_series.smooth(3.083333).integrate()
+
+        groups_discharge_rate = WorkingMassRateCollection()
+        mean_discharge_rate = calculate_discharge(gris_rate, smb_rate_series)
+        mean_discharge_rate.user_group = 'all'
+
+        for group in groups:
+            series = groups_regions_rate.filter(
+                basin_id=IceSheet.gris, user_group=group
+            ).first()
+
+            print(group, series)
+
+            if series is None:
+                continue
+
+            groups_discharge_rate.add_series(
+                calculate_discharge(series, smb_rate_series)
+            )
+
+        mouginot_data = pd.read_csv(
+            '~/imbie/mouginot_discharge.tsv',
+            names=['year', 'discharge', 'error'],
+            index_col='year'
+        )
+        mouginot_t = np.asarray(
+            mouginot_data.index.values, dtype=np.float)
+        mouginot_mass = np.asarray(
+            mouginot_data.discharge.values, dtype=np.float)
+        mouginot_errs = np.asarray(
+            mouginot_data.error.values, dtype=np.float)
+
+        users_discharge_mass = MassChangeCollection(
+            MassChangeDataSeries(
+                'Mouginot', 'IOM', 'IOM', BasinGroup.sheets, IceSheet.gris, np.nan,
+                mouginot_t, mouginot_t*np.nan, mouginot_mass, mouginot_errs
+            )
+        )
+        mean_discharge_mass = mean_discharge_rate.integrate() # smooth(3.083333)
+        groups_discharge_mass = groups_discharge_rate.integrate( # smooth(3.083333)
+            align=mean_discharge_mass
+        )
+
+        print('group discharge:', len(groups_discharge_rate), len(groups_discharge_mass))
 
 
 
-    # SMB + Dynamics
+        # SMB + Dynamics
 
-    if config.output_timestep is not None:
-        mean_discharge_mass = mean_discharge_rate.reduce(
-            config.output_timestep, config.output_offset, backfill=True
-        ).integrate().reduce(config.output_timestep, config.output_offset)
+        if config.output_timestep is not None:
+            mean_discharge_mass = mean_discharge_rate.reduce(
+                config.output_timestep, config.output_offset, backfill=True
+            ).integrate().reduce(config.output_timestep, config.output_offset)
 
-        smb_mass_series = smb_rate_series.reduce(
-            config.output_timestep, config.output_offset, backfill=True
-        ).integrate().reduce(config.output_timestep, config.output_offset)
+            smb_mass_series = smb_rate_series.reduce(
+                config.output_timestep, config.output_offset, backfill=True
+            ).integrate().reduce(config.output_timestep, config.output_offset)
 
-        gris_mass = gris_rate.reduce(
-            config.output_timestep, config.output_offset, backfill=True
-        ).integrate().reduce(config.output_timestep, config.output_offset)
+            gris_mass = gris_rate.reduce(
+                config.output_timestep, config.output_offset, backfill=True
+            ).integrate().reduce(config.output_timestep, config.output_offset)
 
-        mean_discharge_rate = mean_discharge_rate.reduce(config.output_timestep, config.output_offset)
-        smb_rate_series = smb_rate_series.reduce(config.output_timestep, config.output_offset)
-        gris_rate = gris_rate.reduce(config.output_timestep, config.output_offset)
-        # mean_discharge_mass = mean_discharge_mass.reduce(config.output_timestep, config.output_offset)
-        # smb_mass_series = smb_mass_series.reduce(config.output_timestep, config.output_offset)
-        # gris_mass = gris_mass.reduce(config.output_timestep, config.output_offset)
-    # write CSV data
-    dyn_df = pd.DataFrame(
-        data={
-            'dynamics_dmdt': pd.Series(
-                mean_discharge_rate.dmdt, index=mean_discharge_rate.t),
-            'dynamics_dmdt_sd': pd.Series(
-                mean_discharge_rate.errs, index=mean_discharge_rate.t)
-        }
-    )
-    smb_df = pd.DataFrame(
-        data={
-            'smb_dmdt': pd.Series(
-                smb_rate_series.dmdt, index=smb_rate_series.t),
-            'smb_dmdt_sd': pd.Series(
-                smb_rate_series.errs, index=smb_rate_series.t)
-        }
-    )
-    imb_df = pd.DataFrame(
-        data={
-            'imbie_dmdt': pd.Series(
-                gris_rate.dmdt, index=gris_rate.t),
-            'imbie_dmdt_sd': pd.Series(
-                gris_rate.errs, index=gris_rate.t)
-        }
-    )
-    # dyn_df = pd.DataFrame(
-    #     data={
-    #         'dynamics_dmdt': pd.Series(dyn_rate, index=dyn_t),
-    #         'dynamics_dmdt_sd': pd.Series(dyn_rate_err, index=dyn_t)
-    #     }
-    # )
-    # smb_df = pd.DataFrame(
-    #     data={
-    #         'smb_dmdt': pd.Series(smb_rate, index=smb_t),
-    #         'smb_dmdt_sd': pd.Series(smb_rate_err, index=smb_t)
-    #     }
-    # )
-    # imb_df = pd.DataFrame(
-    #     data={
-    #         'imbie_dmdt': pd.Series(imbie_rate, index=imbie_t),
-    #         'imbie_dmdt_sd': pd.Series(imbie_rate_err, index=imbie_t)
-    #     }
-    # )
-    md = dyn_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
-    mi = imb_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
-    
-    df = smb_df.merge(mi, left_index=True, right_index=True).merge(md, left_index=True, right_index=True)
-    df.to_csv(os.path.join(output_path, 'imbie_smb_dynamics_dmdt.csv'))
-    # write CSV dM
-    # dyn_df = pd.DataFrame(
-    #     data={
-    #         'dyn_dm': pd.Series(dyn_mass, index=dyn_t),
-    #         'dyn_dm_sd': pd.Series(dyn_mass_err, index=dyn_t)
-    #     }
-    # )
-    # smb_df = pd.DataFrame(
-    #     data={
-    #         'smb_dm': pd.Series(smb_mass, index=smb_t),
-    #         'smb_dm_sd': pd.Series(smb_mass_err, index=smb_t)
-    #     }
-    # )
-    # imb_df = pd.DataFrame(
-    #     data={
-    #         'imbie_dm': pd.Series(gris_mass.mass, index=gris_mass.t),
-    #         'imbie_dm_sd': pd.Series(gris_mass.errs, index=gris_mass.t)
-    #     }
-    # )
+            mean_discharge_rate = mean_discharge_rate.reduce(config.output_timestep, config.output_offset)
+            smb_rate_series = smb_rate_series.reduce(config.output_timestep, config.output_offset)
+            gris_rate = gris_rate.reduce(config.output_timestep, config.output_offset)
+            # mean_discharge_mass = mean_discharge_mass.reduce(config.output_timestep, config.output_offset)
+            # smb_mass_series = smb_mass_series.reduce(config.output_timestep, config.output_offset)
+            # gris_mass = gris_mass.reduce(config.output_timestep, config.output_offset)
+        # write CSV data
+        dyn_df = pd.DataFrame(
+            data={
+                'dynamics_dmdt': pd.Series(
+                    mean_discharge_rate.dmdt, index=mean_discharge_rate.t),
+                'dynamics_dmdt_sd': pd.Series(
+                    mean_discharge_rate.errs, index=mean_discharge_rate.t)
+            }
+        )
+        smb_df = pd.DataFrame(
+            data={
+                'smb_dmdt': pd.Series(
+                    smb_rate_series.dmdt, index=smb_rate_series.t),
+                'smb_dmdt_sd': pd.Series(
+                    smb_rate_series.errs, index=smb_rate_series.t)
+            }
+        )
+        imb_df = pd.DataFrame(
+            data={
+                'imbie_dmdt': pd.Series(
+                    gris_rate.dmdt, index=gris_rate.t),
+                'imbie_dmdt_sd': pd.Series(
+                    gris_rate.errs, index=gris_rate.t)
+            }
+        )
+        md = dyn_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
+        mi = imb_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
         
+        df = smb_df.merge(mi, left_index=True, right_index=True).merge(md, left_index=True, right_index=True)
+        df.to_csv(os.path.join(output_path, 'imbie_smb_dynamics_dmdt.csv'))
 
-    dyn_df = pd.DataFrame(
-        data={
-            'dyn_dm': pd.Series(
-                mean_discharge_mass.mass, index=mean_discharge_mass.t),
-            'dyn_dm_sd': pd.Series(
-                mean_discharge_mass.errs, index=mean_discharge_mass.t)
-        }
-    )
-    smb_df = pd.DataFrame(
-        data={
-            'smb_dm': pd.Series(
-                smb_mass_series.mass, index=smb_mass_series.t),
-            'smb_dm_sd': pd.Series(
-                smb_mass_series.errs, index=smb_mass_series.t)
-        }
-    )
-    imb_df = pd.DataFrame(
-        data={
-            'imbie_dm': pd.Series(
-                gris_mass.mass, index=gris_mass.t),
-            'imbie_dm_sd': pd.Series(
-                gris_mass.errs, index=gris_mass.t)
-        }
-    )
-    md = dyn_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
-    mi = imb_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
-    
-    df = smb_df.merge(mi, left_index=True, right_index=True).merge(md, left_index=True, right_index=True)
-    df.to_csv(os.path.join(output_path, 'accumulated_dm.csv'))
+        # write CSV dM 
+        dyn_df = pd.DataFrame(
+            data={
+                'dyn_dm': pd.Series(
+                    mean_discharge_mass.mass, index=mean_discharge_mass.t),
+                'dyn_dm_sd': pd.Series(
+                    mean_discharge_mass.errs, index=mean_discharge_mass.t)
+            }
+        )
+        smb_df = pd.DataFrame(
+            data={
+                'smb_dm': pd.Series(
+                    smb_mass_series.mass, index=smb_mass_series.t),
+                'smb_dm_sd': pd.Series(
+                    smb_mass_series.errs, index=smb_mass_series.t)
+            }
+        )
+        imb_df = pd.DataFrame(
+            data={
+                'imbie_dm': pd.Series(
+                    gris_mass.mass, index=gris_mass.t),
+                'imbie_dm_sd': pd.Series(
+                    gris_mass.errs, index=gris_mass.t)
+            }
+        )
+        md = dyn_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
+        mi = imb_df.reindex(smb_df.index, method='nearest', tolerance=1./24)
+        
+        df = smb_df.merge(mi, left_index=True, right_index=True).merge(md, left_index=True, right_index=True)
+        df.to_csv(os.path.join(output_path, 'accumulated_dm.csv'))
 
-    windows = [
-        (1992, 1997), (1997, 2002), (2002, 2007), (2007, 2012), (2012, 2017), (2005, 2015), (1992, 2011), (1992, 2018)
-    ]
-    imb_tab = []
-    smb_tab = []
-    dyn_tab = []
-    headers = []
+        windows = [
+            (1992, 1997), (1997, 2002), (2002, 2007),
+            (2007, 2012), (2012, 2017), (2005, 2015),
+            (1992, 2011), (1992, 2018)
+        ]
+        imb_tab = []
+        smb_tab = []
+        dyn_tab = []
+        headers = []
 
-    for w0, w1 in windows:
-        smb_w = smb_rate_series.truncate(w0, w1, interp=False)
-        dyn_w = mean_discharge_rate.truncate(w0, w1, interp=False)
-        imb_w = gris_rate.truncate(w0, w1, interp=False)
+        for w0, w1 in windows:
+            smb_w = smb_rate_series.truncate(w0, w1, interp=False)
+            dyn_w = mean_discharge_rate.truncate(w0, w1, interp=False)
+            imb_w = gris_rate.truncate(w0, w1, interp=False)
 
-        # smb_w = np.logical_and(smb_t >= w0, smb_t <= w1)
-        # dyn_w = np.logical_and(dyn_t >= w0, dyn_t <= w1)
-        # imb_w = np.logical_and(
-        #     imbie_t >= w0, imbie_t < w1 + 1
-        # )
-        # mean_smb_w = np.nanmean(smb_rate[smb_w])
-        # sdev_smb_w = np.sqrt(np.sum((smb_rate_err[smb_w]) ** 2)) / (w1 - w0)
-        # # sdev_smb_w = np.nanstd(smb_rate_err[smb_w] * 12) / (w1 - w0)
-        # # sdev_smb_w = np.sqrt(np.nanmean((smb_rate_err[smb_w]) ** 2)) / (w1 - w0)
-        # # sdev_smb_w = np.sum(smb_rate_err[smb_w]) / (w1 - w0) # ** 2
+            smb_tab.append('%.1f\u00B1%.1f' % (smb_w.mean, smb_w.sigma))
+            dyn_tab.append('%.1f\u00B1%.1f' % (dyn_w.mean, dyn_w.sigma))
+            imb_tab.append('%.1f\u00B1%.1f' % (imb_w.mean, imb_w.sigma))
+            headers.append('%i-%i' % (w0, w1))
 
-        # mean_dyn_w = np.nanmean(dyn_rate[dyn_w])
-        # sdev_dyn_w = np.sqrt(np.sum((dyn_rate_err[dyn_w]) ** 2)) / (w1 - w0)
-        # # sdev_dyn_w = np.sqrt(np.nanmean((dyn_rate_err[dyn_w]) ** 2)) / (w1 - w0)
-        # # sdev_dyn_w = np.sum(dyn_rate_err[dyn_w]) / (w1 - w0) # ** 2
-
-        # mean_imb_w = np.nanmean(imbie_rate[imb_w])
-        # sdev_imb_w = np.sqrt(np.sum((imbie_rate_err[imb_w]) ** 2)) / (w1 - w0)
-        # # sdev_imb_w = np.sqrt(np.nanmean((imbie_rate_err[imb_w]) ** 2)) / (w1 - w0)
-        # # sdev_imb_w = np.sum(imbie_rate_err[imb_w]) / (w1 - w0) # ** 2
-
-        smb_tab.append('%.1f\u00B1%.1f' % (smb_w.mean, smb_w.sigma))
-        dyn_tab.append('%.1f\u00B1%.1f' % (dyn_w.mean, dyn_w.sigma))
-        imb_tab.append('%.1f\u00B1%.1f' % (imb_w.mean, imb_w.sigma))
-        headers.append('%i-%i' % (w0, w1))
-
-    fpath = os.path.join(output_path, 'smb_dynamics_table.csv')
-    with open(fpath, 'w') as f:
-        line = ','.join([''] + headers)
-        f.write(line+'\n')
-        line = ','.join(['Total'] + imb_tab)
-        f.write(line+'\n')
-        line = ','.join(['SMB'] + smb_tab)
-        f.write(line+'\n')
-        line = ','.join(['Dynamics'] + dyn_tab)
-        f.write(line+'\n')
-    
-    print('     ', *headers, sep='\t')
-    print('Total', *imb_tab, sep='\t')
-    print('SMB  ', *smb_tab, sep='\t')
-    print('Dynam', *dyn_tab, sep='\t')
+        fpath = os.path.join(output_path, 'smb_dynamics_table.csv')
+        with open(fpath, 'w') as f:
+            line = ','.join([''] + headers)
+            f.write(line+'\n')
+            line = ','.join(['Total'] + imb_tab)
+            f.write(line+'\n')
+            line = ','.join(['SMB'] + smb_tab)
+            f.write(line+'\n')
+            line = ','.join(['Dynamics'] + dyn_tab)
+            f.write(line+'\n')
+        
+        print('     ', *headers, sep='\t')
+        print('Total', *imb_tab, sep='\t')
+        print('SMB  ', *smb_tab, sep='\t')
+        print('Dynam', *dyn_tab, sep='\t')
 
 
     t_start = int(
