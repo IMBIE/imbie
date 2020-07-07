@@ -116,6 +116,7 @@ class ImbieConfig(ConfigFile):
     output_offset = ConfigParam("output_offset", float, optional=True)
 
     smb_data_path = ConfigParam("smb_data", str, optional=True)
+    discharge_data_path = ConfigParam("discharge_data", str, optional=True)
 
     def read(self, fileobj) -> None:
         super().read(fileobj)

@@ -411,24 +411,25 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
                 calculate_discharge(series, smb_rate_series)
             )
 
-        mouginot_data = pd.read_csv(
-            '~/imbie/mouginot_discharge.tsv',
-            names=['year', 'discharge', 'error'],
-            index_col='year'
-        )
-        mouginot_t = np.asarray(
-            mouginot_data.index.values, dtype=np.float)
-        mouginot_mass = np.asarray(
-            mouginot_data.discharge.values, dtype=np.float)
-        mouginot_errs = np.asarray(
-            mouginot_data.error.values, dtype=np.float)
-
-        users_discharge_mass = MassChangeCollection(
-            MassChangeDataSeries(
-                'Mouginot', 'IOM', 'IOM', BasinGroup.sheets, IceSheet.gris, np.nan,
-                mouginot_t, mouginot_t*np.nan, mouginot_mass, mouginot_errs
+        if config.discharge_data_path is not None:
+            mouginot_data = pd.read_csv(
+                '~/imbie/mouginot_discharge.tsv',
+                names=['year', 'discharge', 'error'],
+                index_col='year'
             )
-        )
+            mouginot_t = np.asarray(
+                mouginot_data.index.values, dtype=np.float)
+            mouginot_mass = np.asarray(
+                mouginot_data.discharge.values, dtype=np.float)
+            mouginot_errs = np.asarray(
+                mouginot_data.error.values, dtype=np.float)
+
+            users_discharge_mass = MassChangeCollection(
+                MassChangeDataSeries(
+                    'Mouginot', 'IOM', 'IOM', BasinGroup.sheets, IceSheet.gris, np.nan,
+                    mouginot_t, mouginot_t*np.nan, mouginot_mass, mouginot_errs
+                )
+            )
         mean_discharge_mass = mean_discharge_rate.integrate() # smooth(3.083333)
         groups_discharge_mass = groups_discharge_rate.integrate( # smooth(3.083333)
             align=mean_discharge_mass
@@ -888,18 +889,21 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         filetype=config.plot_format,
         path=output_path
     )
-    plotter.discharge_scatter_plot(
-        users_discharge_mass.first(),
-        groups_discharge_mass + mean_discharge_mass
-    )
-    plotter.discharge_plot(
-        mean_discharge_mass.smooth(3.083333),
-        groups_discharge_mass.smooth(3.083333),
-        users_discharge_mass.smooth(3.083333)
-    )
-    plotter.discharge_comparison_plot(
-        gris_mass, smb_mass_smooth, mean_discharge_mass.smooth(3.083333)
-    )
+    if config.smb_data_path is not None:
+        plotter.discharge_comparison_plot(
+            gris_mass, smb_mass_smooth, mean_discharge_mass.smooth(3.083333)
+        )
+        
+        if config.discharge_data_path is not None:
+            plotter.discharge_scatter_plot(
+                users_discharge_mass.first(),
+                groups_discharge_mass + mean_discharge_mass
+            )
+            plotter.discharge_plot(
+                mean_discharge_mass.smooth(3.083333),
+                groups_discharge_mass.smooth(3.083333),
+                users_discharge_mass.smooth(3.083333)
+            )
 
     plotter.ais_four_panel_plot(
         rate_data, regions_rate, regions_mass
