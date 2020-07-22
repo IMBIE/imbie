@@ -927,25 +927,6 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     plotter.annual_dmdt_bars(rate_data_unsmoothed, regions_rate, external_plot=False, imbie1=config.imbie1_compare)
     plotter.annual_dmdt_bars(rate_data_unsmoothed, regions_rate, fix_y=True, external_plot=False, imbie1=config.imbie1_compare)
 
-    ref_path = os.path.expanduser('~/imbie/as_gris_comparison.tsv')
-    df = pd.read_csv(ref_path, names=['date', 'dm'])
-    ref_t = df['date'].values
-    ref_dm = df['dm'].values
-    ref_err = np.zeros_like(ref_dm)
-
-    ref_mass = MassChangeDataSeries(None, None, None, BasinGroup.sheets, IceSheet.gris, None, ref_t, None, ref_dm, ref_err)
-    print(ref_mass)
-    ref_mass_col = MassChangeCollection(ref_mass)
-    print(ref_mass_col)
-    ref_dmdt_monthly = ref_mass_col.to_dmdt(
-        truncate=config.truncate_dmdt, window=3.
-    )
-    ref_dmdt = ref_dmdt_monthly.reduce(interval=1., centre=.5)
-    s = ref_dmdt.first()
-
-    df = pd.DataFrame({'dmdt': s.dmdt, 'err': s.errs}, index=s.t)
-    df.to_csv('gourmelen_replacement.csv')
-
     plotter.annual_dmdt_bars(
         rate_data_unsmoothed,
         regions_rate.reduce(1., centre=.5),
