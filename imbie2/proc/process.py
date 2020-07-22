@@ -413,7 +413,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
         if config.discharge_data_path is not None:
             mouginot_data = pd.read_csv(
-                '~/imbie/mouginot_discharge.tsv',
+                config.discharge_data_path,
                 names=['year', 'discharge', 'error'],
                 index_col='year'
             )
