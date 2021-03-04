@@ -1,13 +1,13 @@
-# IMBIE Processor
+# IMBIE2 Processor
 
 ## Installation
 
 ### Installing Dependancies
 
-The IMBIE processor requires some additional python libraries. A
+The IMBIE2 processor requires some additional python libraries. A
 list of the these can be found in the file `requirements.txt`.
 
-These libraries should be installed before installing the IMBIE
+These libraries should be installed before installing the IMBIE2
 processor. This can be done via `pip`, the python package manager,
 using the command:
 
