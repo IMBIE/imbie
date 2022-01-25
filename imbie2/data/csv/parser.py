@@ -146,7 +146,7 @@ class FileParser(metaclass=ABCMeta):
         
         seen = {}
 
-        def log_warning(message, category, filename, lineno, file=None):
+        def log_warning(message, category, filename, lineno, file=None, line=None):
             """
             write warnings to logging module, checking if they have already
             been found (and supressing those that have)
@@ -225,7 +225,8 @@ class MassChangeParser(FileParser):
                 time=time[i],
                 area=area[i],
                 mass=mass[i],
-                errs=errs[i]
+                errs=errs[i],
+                interpolate=False
             )
 
     def _parse_file(self):

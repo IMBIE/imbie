@@ -118,6 +118,12 @@ class ImbieConfig(ConfigFile):
     smb_data_path = ConfigParam("smb_data", str, optional=True)
     discharge_data_path = ConfigParam("discharge_data", str, optional=True)
 
+    data_min_time = ConfigParam("data_min_time", float, optional=True)
+    data_max_time = ConfigParam("data_max_time", float, optional=True)
+
+    dmdt_tapering = ConfigParam("dmdt_tapering", bool, default=False)
+    dmdt_monthly = ConfigParam("dmdt_monthly", bool, default=False)
+
     def read(self, fileobj) -> None:
         super().read(fileobj)
 

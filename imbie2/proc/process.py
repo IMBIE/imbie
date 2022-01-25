@@ -33,22 +33,56 @@ def prepare_collection(collection: Union[MassRateCollection, MassChangeCollectio
         # normalise dM/dt data
         out = collection.chunk_series()
         sum_basins(out)
+
         if config.apply_dmdt_smoothing:
-            out_smooth = out.smooth(config.dmdt_window, clip=True)
+            out_smooth = out.filter(
+                user_group="IOM"
+            ).reduce(
+                config.reduce_window,
+                centre=.495,
+                backfill=False
+            ).smooth(
+                config.dmdt_window,
+                clip=False,
+                taper=config.dmdt_tapering
+            ).monthly() + out.filter(user_group=["RA", "GMB"]
+            )
+            if config.data_min_time is not None or config.data_max_time is not None:
+                out = out.get_window(config.data_min_time, config.data_max_time)
+                out_smooth = out_smooth.get_window(config.data_min_time, config.data_max_time)
+            # out_smooth = out.smooth(config.dmdt_window, clip=False, taper=config.dmdt_tapering) # clip=True
         else:
+            if config.data_min_time is not None or config.data_max_time is not None:
+                out = out.get_window(config.data_min_time, config.data_max_time)
             out_smooth = out
+            
     elif isinstance(collection, MassChangeCollection):
         sum_basins(collection)
         out = collection.to_dmdt(
-            truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method
+            truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method,
+            tapering=config.dmdt_tapering, monthly=config.dmdt_monthly
         )
+        for user in "Blazquez", "Groh":
+            fpath = os.path.join(config.output_path, f"{user}_breakpoint.csv")
+            with open(fpath, "w") as f:
+                sheets = [IceSheet.ais, IceSheet.gris, IceSheet.wais, IceSheet.apis, IceSheet.eais]
+                for s in out.filter(user=user, basin_id=sheets):
+                    for t, dmdt, sigma in zip(s.t, s.dmdt, s.errs):
+                        print(s.user, s.basin_id.value, t, dmdt, sigma, sep=",", file=f)
+
+        if config.data_min_time is not None or config.data_max_time is not None:
+            out = out.get_window(config.data_min_time, config.data_max_time)
+            
         out_smooth = out
+    elif isinstance(collection, WorkingMassRateCollection):
+        out = collection
+        out_smooth = collection
     else:
         raise TypeError("Expected dM or dM/dt collection")
     return out, out_smooth
 
-def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]],
-            config: ImbieConfig) -> None:
+def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection, WorkingMassRateCollection]],
+            config: ImbieConfig, overwrite: bool = False) -> None:
     """
     runs the main process
     """
@@ -63,15 +97,16 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     output_path = os.path.expanduser(config.output_path)
 
     # check if it exists, clear it if not empty (or abort)
+    if os.path.exists(output_path) and os.listdir(output_path):
+        if not overwrite:
+            msg = "WARNING: directory \"%s\" is not empty, contents will be deleted. Proceed? (Y/n): " % output_path
+            choice = input(msg)
+            if (not choice.lower() == 'y') and choice:
+                print("Processor cancelled by user.")
+                return
+        shutil.rmtree(output_path)
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-    if os.listdir(output_path):
-        msg = "WARNING: directory \"%s\" is not empty, contents will be deleted. Proceed? (Y/n): " % output_path
-        choice = input(msg)
-        if (not choice.lower() == 'y') and choice:
-            print("Processor cancelled by user.")
-            return
-        shutil.rmtree(output_path)
 
     sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais, IceSheet.gris]
     ais_sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
@@ -85,49 +120,50 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     ])
     offset = config.align_date
 
-    names_ra = [
-        'Gardner/Nilsson', 'Gourmelen', 'Gunter', 'Helm', 'McMillan'
-    ]
-    names_la = [
-        'Gunter', 'Helm', 'Pie', 'Sandberg Sorensen'
-    ]
+    # names_ra = [
+    #     'Gardner/Nilsson', 'Gourmelen', 'Gunter', 'Helm', 'McMillan'
+    # ]
+    # names_la = [
+    #     'Gunter', 'Helm', 'Pie', 'Sandberg Sorensen'
+    # ]
 
-    for group in groups:
-        for sheet in sheets:
-            print(group, sheet)
+    # for group in groups:
+    #     for sheet in sheets:
+    #         print(group, sheet)
 
-            num_epochs = 0
-            sum_resolution = 0
+    #         num_epochs = 0
+    #         sum_resolution = 0
 
-            for col in input_data:
-                col_local = col.filter(
-                    user_group=group,
-                    basin_id=sheet
-                )
+    #         for col in input_data:
+    #             col_local = col.filter(
+    #                 user_group=group,
+    #                 basin_id=sheet
+    #             )
+    #             print(len(col_local))
 
-                col_epochs = sum(len(s) for s in col_local)
-                sum_resolution = col_local.mean_temporal_resolution() * col_epochs
-                num_epochs += col_epochs
+    #             col_epochs = sum(len(s) for s in col_local)
+    #             sum_resolution = col_local.mean_temporal_resolution() * col_epochs
+    #             num_epochs += col_epochs
 
-            temp_res = sum_resolution / num_epochs
+    #         temp_res = sum_resolution / num_epochs
 
-            print('mean temporal resolution %s/%s:' % (sheet, group), temp_res)
+    #         print('mean temporal resolution %s/%s:' % (sheet, group), temp_res)
 
-    num_epochs = 0
-    sum_resolution = 0
-    temp_res_each = []
+    # num_epochs = 0
+    # sum_resolution = 0
+    # temp_res_each = []
 
-    for col in input_data:
-        ra_col = col.filter(
-            user_group='RA',
-            user=names_ra,
-            basin_id=IceSheet.gris
-        )
+    # for col in input_data:
+    #     ra_col = col.filter(
+    #         user_group='RA',
+    #         user=names_ra,
+    #         basin_id=IceSheet.gris
+    #     )
 
-        temp_res_each += [c.temporal_resolution() for c in ra_col]
+    #     temp_res_each += [c.temporal_resolution() for c in ra_col]
     
-    print('Greenland RA users min. temporal resolution:', min(temp_res_each))
-    print('Greenland RA users max. temporal resolution:', max(temp_res_each))
+    # print('Greenland RA users min. temporal resolution:', min(temp_res_each))
+    # print('Greenland RA users max. temporal resolution:', max(temp_res_each))
                 
 
     rate_data = WorkingMassRateCollection()
@@ -156,6 +192,9 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
             )
             if not existing:
                 rate_data_unsmoothed.add_series(series)
+
+    # rate_data.round_dates()
+    # rate_data_unsmoothed.round_dates()
 
     # keep copies of zwally/rignot data before merging them
     zwally_data = rate_data.filter(basin_group=BasinGroup.zwally)
@@ -250,7 +289,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
             with open(fname, 'a') as f:
                 for line in zip(series.t, series.dmdt, series.errs):
                     line = series.user_group + ", " + name + ", " + series.basin_id.value + ", " +\
-                            series.basin_group.name + ", " + ", ".join(map(str, line)) + "\n"
+                            series.basin_group.name + ", " + ", ".join(["%.4f" % n for n in line]) + "\n"
                     f.write(line)
     print("done.")
 
@@ -261,31 +300,31 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
                 user_group=group, basin_id=sheet
             )
             
-            min_time = col.min_rate_time()
-            max_time = col.max_rate_time()
-            print('min. dM/dt %s/%s:' % (sheet, group), col.min_rate(), '(Gt/yr), @', min_time)
-            print('max. dM/dt %s/%s:' % (sheet, group), col.max_rate(), '(Gt/yr), @', max_time)
+            # min_time = col.min_rate_time()
+            # max_time = col.max_rate_time()
+            # print('min. dM/dt %s/%s:' % (sheet, group), col.min_rate(), '(Gt/yr), @', min_time)
+            # print('max. dM/dt %s/%s:' % (sheet, group), col.max_rate(), '(Gt/yr), @', max_time)
 
-            minmax_beg = int(min(min_time, max_time))
-            minmax_end = int(max(min_time, max_time) + 1)
+            # minmax_beg = int(min(min_time, max_time))
+            # minmax_end = int(max(min_time, max_time) + 1)
 
-            col_min_max = WorkingMassRateCollection(
-                *[s.truncate(minmax_beg, minmax_end) for s in col]
-            )
-            print('standard deviation in min-max period:', col_min_max.stdev())
+            # col_min_max = WorkingMassRateCollection(
+            #     *[s.truncate(minmax_beg, minmax_end) for s in col]
+            # )
+            # print('standard deviation in min-max period:', col_min_max.stdev())
 
-            others = [g for g in groups if g != group]
+            # others = [g for g in groups if g != group]
 
-            xgroup_min_max = WorkingMassRateCollection(
-                *[s.truncate(minmax_beg, minmax_end) for s in rate_data.filter(basin_id=sheet, user_group=others)]
-            )
-            print('min. dM/dt of all groups %s in period %i-%i' % (sheet, xgroup_min_max.min_time(), xgroup_min_max.max_time()), xgroup_min_max.min_rate(), '(Gt/yr), @', xgroup_min_max.min_rate_time())
-            print('max. dM/dt of all groups %s in period %i-%i' % (sheet, xgroup_min_max.min_time(), xgroup_min_max.max_time()), xgroup_min_max.max_rate(), '(Gt/yr), @', xgroup_min_max.max_rate_time())
+            # xgroup_min_max = WorkingMassRateCollection(
+            #     *[s.truncate(minmax_beg, minmax_end) for s in rate_data.filter(basin_id=sheet, user_group=others)]
+            # )
+            # print('min. dM/dt of all groups %s in period %i-%i' % (sheet, xgroup_min_max.min_time(), xgroup_min_max.max_time()), xgroup_min_max.min_rate(), '(Gt/yr), @', xgroup_min_max.min_rate_time())
+            # print('max. dM/dt of all groups %s in period %i-%i' % (sheet, xgroup_min_max.min_time(), xgroup_min_max.max_time()), xgroup_min_max.max_rate(), '(Gt/yr), @', xgroup_min_max.max_rate_time())
 
-            if group == 'RA':
-                la_col = col.filter(user=names_la)
-                print('LA-only min. dM/dt %s/%s:' % (sheet, group), la_col.min_rate(), '(Gt/yr), @', la_col.min_rate_time())
-                print('LA-only max. dM/dt %s/%s:' % (sheet, group), la_col.max_rate(), '(Gt/yr), @', la_col.max_rate_time())
+            # if group == 'RA':
+            #     la_col = col.filter(user=names_la)
+            #     print('LA-only min. dM/dt %s/%s:' % (sheet, group), la_col.min_rate(), '(Gt/yr), @', la_col.min_rate_time())
+            #     print('LA-only max. dM/dt %s/%s:' % (sheet, group), la_col.max_rate(), '(Gt/yr), @', la_col.max_rate_time())
 
 
             print("computing", group, "average for", sheet.value, end="... ")
@@ -525,7 +564,10 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         windows = [
             (1992, 1997), (1997, 2002), (2002, 2007),
             (2007, 2012), (2012, 2017), (2005, 2015),
-            (1992, 2011), (1992, 2018)
+            (1992, 2011), (2012, 2018), (1992, 2018),
+            (1992, 2000), (2000, 2010), (2010, 2020),
+            (2012, 2020), (1992, 2020),
+            (1993.5, 2018.5), (2006.5, 2018.5)
         ]
         imb_tab = []
         smb_tab = []
@@ -540,7 +582,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
             smb_tab.append('%.1f\u00B1%.1f' % (smb_w.mean, smb_w.sigma))
             dyn_tab.append('%.1f\u00B1%.1f' % (dyn_w.mean, dyn_w.sigma))
             imb_tab.append('%.1f\u00B1%.1f' % (imb_w.mean, imb_w.sigma))
-            headers.append('%i-%i' % (w0, w1))
+            headers.append('%f-%f' % (w0, w1))
 
         fpath = os.path.join(output_path, 'smb_dynamics_table.csv')
         with open(fpath, 'w') as f:
@@ -622,53 +664,56 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         basin_id=IceSheet.gris
     ).first().truncate(c0, c1)
 
-    print('greenland xgroup common:', c0, c1)
-    print('greenland xgroup stdev range:', cdata.errs.min(), cdata.errs.max())
+    # print('greenland xgroup common:', c0, c1)
+    # print('greenland xgroup stdev range:', cdata.errs.min(), cdata.errs.max())
 
     for group in groups:
         group_data = rate_data.filter(
             user_group=group,
             basin_id=IceSheet.gris
         )
-        t0, t1 = group_data.common_period()
-        print('Greenland/%s common period:' % group, t0, '-', t1)
+        # t0, t1 = group_data.common_period()
+        # print('Greenland/%s common period:' % group, t0, '-', t1)
 
-        group_data_global_common = group_data.get_window(c0, c1)
-        print('Greenland/%s stdev in x-group common:' % group, group_data_global_common.stdev())
+        # group_data_global_common = group_data.get_window(c0, c1)
+        # print('Greenland/%s stdev in x-group common:' % group, group_data_global_common.stdev())
 
-        series = groups_sheets_rate.filter(
-            user_group=group,
-            basin_id=IceSheet.gris
-        ).first()
+        # series = groups_sheets_rate.filter(
+        #     user_group=group,
+        #     basin_id=IceSheet.gris
+        # ).first()
 
-        series_common = series.truncate(t0, t1)
-        print('Greenland/%s common range:' % group, series_common.min_rate, series_common.max_rate)
-        print('Greenland/%s common stdev:' % group, np.nanstd(series_common.dmdt))
+        # series_common = series.truncate(t0, t1)
+        # print('Greenland/%s common range:' % group, series_common.min_rate, series_common.max_rate)
+        # print('Greenland/%s common stdev:' % group, np.nanstd(series_common.dmdt))
 
-        if group == 'RA':
-            la_data = group_data.filter(
-                user=names_la
-            )
-            tt0, tt1 = la_data.common_period()
-            la_common = la_data.get_window(tt0, tt1)
-            print('LA common period:', tt0, tt1)
-            print('LA common range:', la_common.min_rate(), la_common.max_rate())
+        # if group == 'RA':
+        #     la_data = group_data.filter(
+        #         user=names_la
+        #     )
+        #     print("LA contributions:", len(la_data))
+        #     tt0, tt1 = la_data.common_period()
 
-        if t0 is None or t1 is None:
-            continue
+        #     if tt0 is not None and tt1 is not None:
+        #         la_common = la_data.get_window(tt0, tt1)
+        #         print('LA common period:', tt0, tt1)
+        #         print('LA common range:', la_common.min_rate(), la_common.max_rate())
 
-        others = [g for g in groups if g != group]
+        # if t0 is None or t1 is None:
+        #     continue
 
-        xwindow = groups_sheets_rate.filter(
-            basin_id=IceSheet.gris,
-            user_group=others
-        ).get_window(t0, t1)
-        intergroup = sheets_rate.filter(
-            basin_id=IceSheet.gris
-        ).first().truncate(t0, t1)
+        # others = [g for g in groups if g != group]
 
-        print('groups %.2f-%.2f range:' % (t0, t1), xwindow.min_rate(), xwindow.max_rate())
-        print('xgroup %.2f-%.2f range:' % (t0, t1), intergroup.min_rate, intergroup.max_rate)
+        # xwindow = groups_sheets_rate.filter(
+        #     basin_id=IceSheet.gris,
+        #     user_group=others
+        # ).get_window(t0, t1)
+        # intergroup = sheets_rate.filter(
+        #     basin_id=IceSheet.gris
+        # ).first().truncate(t0, t1)
+
+        # print('groups %.2f-%.2f range:' % (t0, t1), xwindow.min_rate(), xwindow.max_rate())
+        # print('xgroup %.2f-%.2f range:' % (t0, t1), intergroup.min_rate, intergroup.max_rate)
     
     # TODO: RESTORE THIS
     # supl_data = pd.read_csv(
@@ -798,11 +843,20 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     print("writing table:", filename)
     btr.write(filename)
 
-    rat = RegionAveragesTable(
-        regions_rate, list(regions.keys()),
-        (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010),
-        (2010, 2017), (1992, 2017), (1992, 1997), (1997, 2002), (2002, 2007),
+    windows = [
+        (1992, 1997), (1997, 2002), (2002, 2007),
         (2007, 2012), (2012, 2017), (2005, 2015),
+        (1992, 2011), (2012, 2018), (1992, 2018),
+        (1992, 2000), (2000, 2010), (2010, 2020),
+        (2012, 2020), (1992, 2020),
+        (1993.5, 2018.5), (2006.5, 2018.5)
+    ]
+
+    rat = RegionAveragesTable(
+        regions_rate, list(regions.keys()), *windows,
+        # (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010),
+        # (2010, 2017), (1992, 2017), (1992, 1997), (1997, 2002), (2002, 2007),
+        # (2007, 2012), (2012, 2017), (2005, 2015),
         style=config.table_format
     )
     filename = os.path.join(output_path, "region_window_averages." + rat.default_extension())
@@ -818,9 +872,10 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
 
     rat = RegionAveragesTable(
         regions_rate, [IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.ais],
-        (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010),
-        (2010, 2017), (1992, 2017), (1992, 1997), (1997, 2002), (2002, 2007),
-        (2007, 2012), (2012, 2017), (2005, 2015),
+        *windows,
+        # (1992, 2011), (1992, 2000), (1993, 2003), (2000, 2011), (2005, 2010),
+        # (2010, 2017), (1992, 2017), (1992, 1997), (1997, 2002), (2002, 2007),
+        # (2007, 2012), (2012, 2017), (2005, 2015),
         style=config.table_format
     )
     filename = os.path.join(output_path, "region_window_averages_ais." + rat.default_extension())
@@ -828,26 +883,26 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     print("writing table:", filename)
     rat.write(filename)
 
-    rgt = RegionGroupAveragesTable(
-        groups_regions_rate.window_cropped(), regions_rate.window_cropped(),
-        list(regions.keys()), config.bar_plot_min_time, config.bar_plot_max_time, groups,
-        style=config.table_format
-    )
-    filename = os.path.join(output_path, "region_group_window_averages."+rgt.default_extension())
+    # rgt = RegionGroupAveragesTable(
+    #     groups_regions_rate.window_cropped(), regions_rate.window_cropped(),
+    #     list(regions.keys()), config.bar_plot_min_time, config.bar_plot_max_time, groups,
+    #     style=config.table_format
+    # )
+    # filename = os.path.join(output_path, "region_group_window_averages."+rgt.default_extension())
 
-    print("writing table:", filename)
-    rgt.write(filename)
+    # print("writing table:", filename)
+    # rgt.write(filename)
 
-    rgt = RegionGroupAveragesTable(
-        groups_regions_rate.window_cropped(), regions_rate.window_cropped(),
-        [IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.ais],
-        config.bar_plot_min_time, config.bar_plot_max_time, groups,
-        style=config.table_format
-    )
-    filename = os.path.join(output_path, "region_group_window_averages_ais."+rgt.default_extension())
+    # rgt = RegionGroupAveragesTable(
+    #     groups_regions_rate.window_cropped(), regions_rate.window_cropped(),
+    #     [IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.ais],
+    #     config.bar_plot_min_time, config.bar_plot_max_time, groups,
+    #     style=config.table_format
+    # )
+    # filename = os.path.join(output_path, "region_group_window_averages_ais."+rgt.default_extension())
 
-    print("writing table:", filename)
-    rgt.write(filename)
+    # print("writing table:", filename)
+    # rgt.write(filename)
 
     for group in groups:
         tct = TimeCoverageTable(rate_data.filter(user_group=group), style=config.table_format)
@@ -889,6 +944,13 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         filetype=config.plot_format,
         path=output_path
     )
+    for dataset in input_data + [rate_data]:
+        for series in dataset:
+            if isinstance(series, WorkingMassRateDataSeries):
+                plotter.single_rate_plot(series)
+            elif isinstance(series, MassChangeDataSeries):
+                plotter.single_mass_plot(series)
+
     if config.smb_data_path is not None:
         plotter.discharge_comparison_plot(
             gris_mass, smb_mass_smooth, mean_discharge_mass.smooth(3.083333)
@@ -908,6 +970,18 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     plotter.ais_four_panel_plot(
         rate_data, regions_rate, regions_mass
     )
+    plotter.ais_four_panel_plot(
+        rate_data, regions_rate, regions_mass,
+        sheets=sheets, aggregated=False, suffix="4sheet"
+    )
+    plotter.ais_four_panel_plot(
+        rate_data, regions_rate, regions_mass,
+        sheets=[IceSheet.ais, IceSheet.gris, IceSheet.all], aggregated=False, suffix="ais_gris_all"
+    )
+    plotter.ais_four_panel_plot(
+        rate_data, regions_rate, regions_mass,
+        sheets=[IceSheet.ais, IceSheet.gris], aggregated=False, suffix="ais_gris"
+    )
     plotter.stacked_coverage(
         rate_data.filter(basin_id=sheets)
     )
@@ -924,8 +998,24 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         plotter.windows_comparison(
             compare_windows(rate_data.filter(basin_id=sheet), 10), suffix=sheet.value
         )
+
     plotter.annual_dmdt_bars(rate_data_unsmoothed, regions_rate, external_plot=False, imbie1=config.imbie1_compare)
     plotter.annual_dmdt_bars(rate_data_unsmoothed, regions_rate, fix_y=True, external_plot=False, imbie1=config.imbie1_compare)
+    plotter.annual_dmdt_bars(
+        rate_data_unsmoothed,
+        regions_rate,
+        fix_y=True,
+        external_plot=False,
+        imbie1=config.imbie1_compare,
+        sheets=[IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.gris]
+    )
+    plotter.annual_dmdt_bars(
+        rate_data_unsmoothed,
+        regions_rate,
+        external_plot=False,
+        imbie1=config.imbie1_compare,
+        sheets=[IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.gris]
+    )
 
     plotter.annual_dmdt_bars(
         rate_data_unsmoothed,
@@ -1015,34 +1105,86 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     if config.truncate_avg:
         plotter.named_dmdt_all(
             ais_sheets, groups, rate_data_unsmoothed.window_cropped(),
-            groups_regions_rate.window_cropped()
+            groups_regions_rate.window_cropped(), suffix="ais"
         )
         plotter.named_dmdt_all(
             ais_sheets, groups, rate_data_unsmoothed.window_cropped(),
             groups_regions_rate.window_cropped(),
+            sharex=True, suffix="ais"
+        )
+        plotter.named_dmdt_all(
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped()
+        )
+        plotter.named_dmdt_all(
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped(),
             sharex=True
         )
+        # flipped grid versions
         plotter.named_dmdt_all(
-            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
-            groups_regions_rate.window_cropped(), suffix='gris'
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped(), flip_grid=True, suffix="flipped"
         )
         plotter.named_dmdt_all(
-            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
-            groups_regions_rate.window_cropped(), suffix='gris', sharex=True
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.window_cropped(),
+            sharex=True, flip_grid=True, suffix="flipped"
         )
+        for sheet in sheets:
+            plotter.named_dmdt_all(
+                [sheet], groups, rate_data_unsmoothed.window_cropped(),
+                groups_regions_rate.window_cropped(), suffix=sheet.value
+            )
+            plotter.named_dmdt_all(
+                [sheet], groups, rate_data_unsmoothed.window_cropped(),
+                groups_regions_rate.window_cropped(), suffix=sheet.value, sharex=True
+            )
     else:
         plotter.named_dmdt_all(
-            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+            ais_sheets, groups, rate_data_unsmoothed.window_cropped(),
             groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
-            full_dmdt=rate_data_unsmoothed, suffix='gris',
-            flip_grid=False
+            full_dmdt=rate_data_unsmoothed, suffix="ais"
         )
         plotter.named_dmdt_all(
-            [IceSheet.gris], groups, rate_data_unsmoothed.window_cropped(),
+            ais_sheets, groups, rate_data_unsmoothed.window_cropped(),
             groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
-            full_dmdt=rate_data_unsmoothed, suffix='gris',
-            sharex=True, flip_grid=False
+            full_dmdt=rate_data_unsmoothed, sharex=True, suffix="ais"
         )
+        plotter.named_dmdt_all(
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            full_dmdt=rate_data_unsmoothed,
+        )
+        plotter.named_dmdt_all(
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            full_dmdt=rate_data_unsmoothed, sharex=True
+        )
+        # grid flipped version
+        plotter.named_dmdt_all(
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            full_dmdt=rate_data_unsmoothed, flip_grid=True, suffix="flipped"
+        )
+        plotter.named_dmdt_all(
+            sheets, groups, rate_data_unsmoothed.window_cropped(),
+            groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+            full_dmdt=rate_data_unsmoothed, sharex=True, flip_grid=True, suffix="flipped"
+        )
+        for sheet in sheets:
+            plotter.named_dmdt_all(
+                [sheet], groups, rate_data_unsmoothed.window_cropped(),
+                groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+                full_dmdt=rate_data_unsmoothed, suffix=sheet.value,
+                flip_grid=False
+            )
+            plotter.named_dmdt_all(
+                [sheet], groups, rate_data_unsmoothed.window_cropped(),
+                groups_regions_rate.smooth(config.plot_smooth_window, iters=config.plot_smooth_iters),
+                full_dmdt=rate_data_unsmoothed, suffix=sheet.value,
+                sharex=True, flip_grid=False
+            )
 
     for i, g in enumerate(groups):
         plotter.named_dmdt_all(
@@ -1097,6 +1239,13 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
     # region comparisons
     ais_regions = [IceSheet.eais, IceSheet.wais, IceSheet.apis]
     all_regions = [IceSheet.ais, IceSheet.gris, IceSheet.all]
+
+    plotter.regions_rate_intercomparison(
+        regions_rate, IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.gris
+    )
+    plotter.regions_mass_intercomparison(
+        regions_mass, IceSheet.eais, IceSheet.wais, IceSheet.apis, IceSheet.gris
+    )
     # plotter.regions_mass_intercomparison(
     #     regions_mass, *sheets
     # )
@@ -1138,7 +1287,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
                         interp=True
                     )
                 for line in zip(series.t, series.dmdt, series.errs):
-                    line = series.user_group + ", " + series.basin_id.value + ", " + ", ".join(map(str, line)) + "\n"
+                    line = series.user_group + ", " + series.basin_id.value + ", " + ", ".join(["%.4f" % n for n in line]) + "\n"
                     f.write(line)
 
         data = regions_rate.filter(basin_id=region).first()
@@ -1153,7 +1302,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         print("exporting data:", fname, end="... ")
         with open(fname, 'w') as f:
             for line in zip(data.t, data.dmdt, data.errs):
-                line = ", ".join(map(str, line)) + "\n"
+                line = ", ".join(["%.4f" % n for n in line]) + "\n"
                 f.write(line)
         print("done.")
 
@@ -1169,7 +1318,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection]
         print("exporting data:", fname, end="... ")
         with open(fname, 'w') as f:
             for line in zip(data.t, data.mass, data.errs):
-                line = ", ".join(map(str, line)) + "\n"
+                line = ", ".join(["%.4f" % n for n in line]) + "\n"
                 f.write(line)
         print("done.")
 

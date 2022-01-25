@@ -29,6 +29,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('config', type=str, help="Path to an IMBIE configuration file")
     parser.add_argument('-v', '--verbose', action="store_true", help="Show detailed warnings")
+    parser.add_argument("--overwrite", action="store_true", help="overwrite output directory without prompt")
+
 
     args = parser.parse_args()
     cfg_path = args.config
@@ -80,6 +82,7 @@ def main():
             if series is None:
                 continue
 
+            print("rate", series.user_group, series.user, series.basin_id, sep=',')
             rate_mgr.add_series(series)
 
             names.add(series.user)
@@ -88,7 +91,8 @@ def main():
         for series in user.mass_data(convert=False):
             if series is None:
                 continue
-
+            
+            print("mass", series.user_group, series.user, series.basin_id, sep=',')
             mass_mgr.add_series(series)
 
             names.add(series.user)
@@ -108,4 +112,4 @@ def main():
     else:
         data = [rate_mgr.as_collection()]
     # process the data
-    process(data, config)
+    process(data, config, overwrite=args.overwrite)

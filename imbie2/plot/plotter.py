@@ -94,15 +94,37 @@ def sum_sheets(ts, data):
     return t[ok], out[ok]
 
 
-def render_plot(method):
-    @wraps(method)
-    def wrapped(obj, *args, **kwargs):
-        obj.clear_plot()
-        ret = method(obj, *args, **kwargs)
-        obj.draw_plot(ret)
+# def render_plot(method):
+#     @wraps(method)
+#     def wrapped(obj, *args, **kwargs):
+#         obj.clear_plot()
+#         ret = method(obj, *args, **kwargs)
+#         obj.draw_plot(ret)
 
-    return wrapped
+#     return wrapped
+class render_plot:
+    def __init__(self, subdir: str = None, legend: bool = False):
+        self.subdir = subdir
+        self.legend = legend
 
+    def __call__(self, method):
+        @wraps(method)
+        def wrapped(obj, *args, **kwargs):
+            obj.clear_plot()
+            if self.legend:
+                obj.clear_legend()
+                ret, leg = method(obj, *args, **kwargs)
+                if leg.pop('extra', False):
+                    leg = obj.draw_legend(**leg)
+                    obj.draw_plot(ret, extra=(leg,), subdir=self.subdir)
+                else:
+                    obj.draw_legend(**leg)
+                    obj.draw_plot(ret, subdir=self.subdir)
+            else:
+                ret = method(obj, *args, **kwargs)
+                obj.draw_plot(ret, subdir=self.subdir)
+        
+        return wrapped
 
 def render_plot_with_legend(method):
     @wraps(method)
@@ -127,7 +149,7 @@ class Plotter:
     _dmdt1 = 200 # 300
     _dm0 = -9000
     _dm1 = 3000
-    _set_limits = True
+    _set_limits = False
 
     _imbie1_ylim_dmdt = -450, 300
     _imbie1_ylim_dm = -5000, 1000
@@ -187,23 +209,28 @@ class Plotter:
         code = h * 100 + w * 10
         return w, h, code
 
-    def draw_plot(self, fname=None, extra=None):
+    def draw_plot(self, fname=None, extra=None, subdir: str = None):
+        if subdir is not None:
+            path = os.path.join(self._path, subdir)
+        else:
+            path = self._path
+
         if fname is None:
             plt.close(self.fig)
             return
         elif self._ext is None:
             plt.show()
         else:
-            if not os.path.exists(self._path):
-                print("creating directory: {}".format(self._path))
-                os.makedirs(self._path)
+            if not os.path.exists(path):
+                print("creating directory: {}".format(path))
+                os.makedirs(path)
             fname = fname+'.'+self._ext
-            fpath = os.path.join(self._path, fname)
+            fpath = os.path.join(path, fname)
 
             if extra is None:
-                plt.savefig(fpath, dpi=192, bbox_inches='tight')
+                plt.savefig(fpath, dpi=72, bbox_inches='tight')
             else:
-                plt.savefig(fpath, bbox_extra_artists=extra, dpi=192, bbox_inches='tight')
+                plt.savefig(fpath, bbox_extra_artists=extra, dpi=72, bbox_inches='tight')
             self.ax.clear()
             self.fig.clear()
 
@@ -244,7 +271,7 @@ class Plotter:
     def colour_glyph(colour, label=None, **kwargs):
         return mpatches.Patch(color=colour, label=label, **kwargs)
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def sheets_time_bars(self, data, sheets, names, *groups, suffix: str=None):
         if not groups:
             groups = ["RA", "GMB", "IOM"]
@@ -333,7 +360,7 @@ class Plotter:
             sheet_names += "_" + suffix
         return "sheets_time_bars_"+sheet_names, leg_params
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def split_time_bars(self, rate_data, mass_data, sheet, names, groups=None,
                         prefix=None):
         if groups is None:
@@ -426,7 +453,7 @@ class Plotter:
         return prefix+"_split_time_bars_"+sheet.value, {'loc': 4, 'frameon': False}
 
 
-    @render_plot
+    @render_plot(subdir="plots")
     def rignot_zwally_comparison(self, data: WorkingMassRateCollection, sheets: Sequence[IceSheet]) -> str:
 
         for sheet in sheets:
@@ -470,7 +497,7 @@ class Plotter:
 
         return "rignot_zwally_comparison_" + "_".join([s.value for s in sheets])
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def basin_errors(self, basins, data, name, sheets=None):
         min_y = 0
         max_y = 0
@@ -594,7 +621,57 @@ class Plotter:
         # return plot name
         return "errors_" + name.lower(), {"frameon": False, "loc": 4}
 
-    @render_plot_with_legend
+    @render_plot(subdir="single/rate")
+    def single_rate_plot(self, series: WorkingMassRateDataSeries):
+        """
+        plot individual dmdt contribution
+        """
+        pcol = style.colours.primary[series.user_group]
+        scol = style.colours.secondary[series.user_group]
+
+        plt.fill_between(
+            series.t,
+            series.dmdt-series.errs,
+            series.dmdt+series.errs,
+            color=scol, alpha=.5
+        )
+        plt.plot(series.t, series.dmdt, lw=2, color=pcol)
+        plt.title(series.user)
+        plt.suptitle(series.basin_id.value.upper())
+
+        plt.xlabel("Year")
+        plt.gcf().autofmt_xdate()
+        plt.ylabel("$\\frac{dM}{dt} (Gt)$")
+
+        name = series.user.replace("/", "_")
+        return "single_rate_plot_%s_%s" % (name, series.basin_id.value)
+
+    @render_plot(subdir="single/mass")
+    def single_mass_plot(self, series: WorkingMassRateDataSeries):
+        """
+        plot individual dmdt contribution
+        """
+        pcol = style.colours.primary[series.user_group]
+        scol = style.colours.secondary[series.user_group]
+
+        plt.fill_between(
+            series.t,
+            series.mass-series.errs,
+            series.mass+series.errs,
+            color=scol, alpha=.5
+        )
+        plt.plot(series.t, series.mass, lw=2, color=pcol)
+        plt.title(series.user)
+        plt.suptitle(series.basin_id.value.upper())
+
+        plt.xlabel("Year")
+        plt.gcf().autofmt_xdate()
+        plt.ylabel("$dM(t) (Gt)$")
+
+        name = series.user.replace("/", "_")
+        return "single_mass_plot_%s_%s" % (name, series.basin_id.value)
+
+    @render_plot(subdir="plots", legend=True)
     def sheets_error_bars(self, group_avgs: WorkingMassRateCollection, sheet_avgs: WorkingMassRateCollection,
                           methods: Sequence[str], sheets: Sequence[IceSheet], ylabels: bool=False,
                           window: Tuple[float, float]=None, suffix: str=None):
@@ -711,7 +788,7 @@ class Plotter:
             leg_style = dict(frameon=False)
         return name, leg_style
 
-    @render_plot
+    @render_plot(subdir="plots")
     def coverage_combined(self, stack_data, coverage_data, names):
         """
         """
@@ -821,7 +898,7 @@ class Plotter:
 
         return "coverage_combined"
 
-    @render_plot
+    @render_plot(subdir="plots")
     def windows_comparison(self, data: Sequence[WindowStats], suffix: str=None):
         """
         stacked bar plot of number of submissions per time window
@@ -852,7 +929,7 @@ class Plotter:
             suffix = "_" + suffix
         return "windows_comparison" + suffix
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def stacked_coverage(self, data: Union[WorkingMassRateCollection, MassChangeCollection], suffix: str=None):
         """
         stacked area plot of number of submissions over time
@@ -897,9 +974,9 @@ class Plotter:
         if suffix is not None:
             name += "_"+suffix
 
-        return name, dict(loc='top left', frameon=False, framealpha=0)
+        return name, dict(loc='upper left', frameon=False, framealpha=0)
 
-    @render_plot
+    @render_plot(subdir="plots")
     def group_rate_boxes(self, rate_data: WorkingMassRateCollection, regions, suffix: str=None):
         plt_w, plt_h, plt_shape = self._get_subplot_shape(len(regions))
 
@@ -957,7 +1034,7 @@ class Plotter:
             name += "_" + suffix
         return name
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def sheet_scatter(self, ice_sheet: IceSheet, basins: BasinGroup, data: WorkingMassRateCollection):
         markers = cycle(style.markers)
         groups = set()
@@ -998,7 +1075,7 @@ class Plotter:
             return "scatter_"+ice_sheet.value, legend_style
         return None, {}
 
-    @render_plot
+    @render_plot(subdir="plots")
     def group_rate_intracomparison(self, group_avgs: WorkingMassRateCollection,
             group_contribs: WorkingMassRateCollection, regions, suffix: str=None, mark: Sequence[str]=None) -> str:
         """
@@ -1069,7 +1146,7 @@ class Plotter:
             name += "_" + suffix
         return name
 
-    @render_plot
+    @render_plot(subdir="plots")
     def group_mass_intracomparison(self, group_avgs: MassChangeCollection, group_contribs: MassChangeCollection,
                                    regions, suffix: str=None, mark: Sequence[str]=None, align: bool=False) -> str:
         """
@@ -1141,7 +1218,7 @@ class Plotter:
             name += "_" + suffix
         return name
 
-    @render_plot
+    @render_plot(subdir="plots")
     def groups_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, group_avgs: WorkingMassRateCollection,
                                     regions, groups=None) -> str:
         """
@@ -1211,7 +1288,7 @@ class Plotter:
         name += "_".join([s.value for s in regions])
         return name
 
-    @render_plot
+    @render_plot(subdir="plots")
     def groups_mass_intercomparison(self, region_avgs: MassChangeCollection, group_avgs: MassChangeCollection,
                                     regions, align: bool=False, groups=None) -> str:
         """
@@ -1279,7 +1356,7 @@ class Plotter:
         name += "_".join([s.value for s in regions])
         return name
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def regions_mass_intercomparison(self, region_avgs: MassChangeCollection, *regions: Sequence[IceSheet]) -> str:
         pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
         scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
@@ -1318,7 +1395,7 @@ class Plotter:
 
         return "regions_mass_intercomparison_"+"_".join(r.value for r in regions), {"frameon": False, "loc": 3}
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def regions_rate_intercomparison(self, region_avgs: WorkingMassRateCollection, *regions: Sequence[IceSheet]) -> str:
         pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
         scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
@@ -1357,7 +1434,7 @@ class Plotter:
 
         return "regions_rate_intercomparison_" + "_".join(r.value for r in regions), {"frameon": False, "loc": 3}
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def named_dmdt_group_plot(self, region: IceSheet, group: str, data: WorkingMassRateCollection,
                               avg: WorkingMassRateDataSeries=None, full_dmdt: WorkingMassRateCollection=None,
                               alternative_avg: WorkingMassRateDataSeries=None,
@@ -1456,7 +1533,7 @@ class Plotter:
         legend_style = dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True, ncol=4, handletextpad=-2)
         return "named_dmdt_"+region.value+"_"+group, legend_style
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def named_dm_group_plot(self, region: IceSheet, group: str, data: MassChangeCollection,
                             basis: MassChangeDataSeries=None):
         data = data.filter(user_group=group, basin_id=region)
@@ -1483,7 +1560,7 @@ class Plotter:
 
         return "named_dm_" + region.value + "_" + group, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0., extra=True)
 
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def named_dmdt_comparison_plot(self, data_a: WorkingMassRateCollection, data_b: WorkingMassRateCollection, suffix: str):
         pairs = []
         for series_a in data_a:
@@ -1524,7 +1601,7 @@ class Plotter:
         return "named_dmdt_comparison_" + suffix, dict(loc=2, bbox_to_anchor=(1.05, 1), borderaxespad=0.,
                                                                 extra=True)
 
-    @render_plot
+    @render_plot(subdir="plots")
     def named_dmdt_all(self, regions: Sequence[IceSheet], groups: Sequence[str], data: WorkingMassRateCollection,
                               avg: WorkingMassRateCollection=None, full_dmdt: WorkingMassRateCollection=None,
                               alternative_avg: WorkingMassRateCollection=None, sharex: bool=False, suffix: str=None,
@@ -1726,23 +1803,34 @@ class Plotter:
         return "named_dmdt_all" + suf
 
     
-    @render_plot_with_legend
+    @render_plot(subdir="plots", legend=True)
     def ais_four_panel_plot(self, rate_data: WorkingMassRateCollection, average_rates: WorkingMassRateCollection,
-                            sheet_mass: MassChangeCollection):
+                            sheet_mass: MassChangeCollection, sheets=None, aggregated: bool = True, suffix: str = None):
         """
         four panel plot showing dM/dt per user (coloured by group) for APIS, EAIS, WAIS in first
         three panels, plus aggregated dM(t) per ice sheet coloured for APIS, EAIS, WAIS & AIS in
         final panel
         """
 
-        self.fig, (*sheet_axs, cross_ax) = plt.subplots(4, sharex=True)
+        if sheets is None:
+            sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
+        n_plots = len(sheets)
+        if aggregated:
+            n_plots += 1
+
+        self.fig, axs = plt.subplots(n_plots, sharex=True)
+
+        if aggregated:
+            *sheet_axs, cross_ax = axs
+        else:
+            sheet_axs = axs
         self.fig.autofmt_xdate()
         self.fig.set_size_inches(16, 36)
 
         ymin = 0
         ymax = 0
 
-        sheets = [IceSheet.apis, IceSheet.eais, IceSheet.wais]
+        
         for sheet, ax in zip(sheets, sheet_axs):
             ax.set_title(self._sheet_names[sheet])
             ax.set_ylabel("dM/dt (Gt/yr)")
@@ -1783,33 +1871,36 @@ class Plotter:
         for ax in sheet_axs:
             ax.set_ylim(ymin, ymax)
 
-        pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
-        scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
+        if aggregated:
+            pcols = cycle(["#531A59", "#1B8C6F", "#594508", "#650D1B"])
+            scols = cycle(["#9E58A5", "#4CA58F", "#D8B54D", "#A8152E"])
 
-        cross_ax.set_title('Antarctica')
-        cross_ax.set_ylabel('Mass Change (Gt)')
+            cross_ax.set_title('Antarctica')
+            cross_ax.set_ylabel('Mass Change (Gt)')
 
-        for sheet, pcol, scol in zip([IceSheet.ais]+sheets, pcols, scols):
-            series = sheet_mass.filter(basin_id=sheet).first()
+            for sheet, pcol, scol in zip([IceSheet.ais]+sheets, pcols, scols):
+                series = sheet_mass.filter(basin_id=sheet).first()
 
-            self.labels.append(
-                self._sheet_names[sheet]
-            )
-            self.glyphs.append(
-                self.colour_glyph(scol)
-            )
+                self.labels.append(
+                    self._sheet_names[sheet]
+                )
+                self.glyphs.append(
+                    self.colour_glyph(scol)
+                )
 
-            cross_ax.plot(series.t, series.mass, color=pcol)
-            cross_ax.fill_between(
-                series.t,
-                series.mass-series.errs,
-                series.mass+series.errs,
-                color=scol, alpha=.5
-            )
-                    
-        return "ais_four_panel_plot", dict(loc=3)
+                cross_ax.plot(series.t, series.mass, color=pcol)
+                cross_ax.fill_between(
+                    series.t,
+                    series.mass-series.errs,
+                    series.mass+series.errs,
+                    color=scol, alpha=.5
+                )
+        name = "ais_four_panel_plot"
+        if suffix is not None:
+            name += "_" + suffix     
+        return name, dict(loc=3)
 
-    @render_plot
+    @render_plot(subdir="plots")
     def annual_dmdt_bars(self, user_rates: WorkingMassRateCollection, sheet_rates: WorkingMassRateCollection, fix_y: bool=False,
                          external_plot: bool=True, imbie1: bool=False, sheets: Sequence[IceSheet]=None, ref_rates: WorkingMassRateCollection=None):
         """
@@ -2127,7 +2218,7 @@ class Plotter:
         suffix += '_'+'_'.join(sheet.value for sheet in sheets)
         return "annual_dmdt_bars"+suffix
 
-    @render_plot
+    @render_plot(subdir="plots")
     def greenland_plot(self, data: MassChangeDataSeries, imbie1: bool=False) -> str:
         from matplotlib.ticker import MultipleLocator
 
@@ -2191,7 +2282,7 @@ class Plotter:
 
         return "gris_mass_comparison"
 
-    @render_plot
+    @render_plot(subdir="plots")
     def external_data_plot(self, imbie1: bool=False) -> str:
         from matplotlib.ticker import MultipleLocator
 
@@ -2282,7 +2373,7 @@ class Plotter:
 
         return "external_data_plot"
 
-    @render_plot
+    @render_plot(subdir="plots")
     def discharge_plot(self, mean_discharge: MassChangeDataSeries, groups_discharge: MassChangeCollection,
                        users_discharge: MassChangeCollection) -> str:
         self.ax.fill_between(
@@ -2349,7 +2440,7 @@ class Plotter:
 
         return "discharge_plot"
 
-    @render_plot
+    @render_plot(subdir="plots")
     def discharge_comparison_plot(self, mass_balance: MassChangeDataSeries, surface_mass: MassChangeDataSeries, discharge: MassChangeDataSeries) -> str:
         self.ax.fill_between(
             mass_balance.t,
@@ -2385,7 +2476,7 @@ class Plotter:
         self.fig.autofmt_xdate()
         return 'imbie_smb_dynamics'
 
-    @render_plot
+    @render_plot(subdir="plots")
     def discharge_scatter_plot(self, reference: MassChangeDataSeries, data: MassChangeCollection) -> str:
         for series in data:
             ref_mass = np.interp(
