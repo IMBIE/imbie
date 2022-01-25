@@ -1,8 +1,9 @@
 from .data_series import DataSeries
 import numpy as np
+from scipy.interpolate import interp1d
 import math
 
-from imbie2.util.functions import match, smooth_imbie
+from imbie2.util.functions import match, smooth_imbie, t2m, ts2m
 from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.util import dm_to_dmdt
 from imbie2.const.basins import BasinGroup, Basin
@@ -14,7 +15,6 @@ from typing import Optional, Tuple
 
 
 class MassRateDataSeries(DataSeries):
-
     @property
     def min_rate(self) -> None:
         ok = np.isfinite(self.dmdt)
@@ -25,13 +25,35 @@ class MassRateDataSeries(DataSeries):
         ok = np.isfinite(self.dmdt)
         return np.max(self.dmdt[ok])
 
-    def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
-                 basin_group: BasinGroup, basin_id: Basin, basin_area: float, t_start: np.ndarray, t_end: np.ndarray,
-                 area: np.ndarray, rate: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False,
-                 aggregated: bool=False, contributions: int=1):
+    def __init__(
+        self,
+        user: Optional[str],
+        user_group: Optional[str],
+        data_group: Optional[str],
+        basin_group: BasinGroup,
+        basin_id: Basin,
+        basin_area: float,
+        t_start: np.ndarray,
+        t_end: np.ndarray,
+        area: np.ndarray,
+        rate: np.ndarray,
+        errs: np.ndarray,
+        computed: bool = False,
+        merged: bool = False,
+        aggregated: bool = False,
+        contributions: int = 1,
+    ):
         super().__init__(
-            user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged, aggregated, contributions
+            user,
+            user_group,
+            data_group,
+            basin_group,
+            basin_id,
+            basin_area,
+            computed,
+            merged,
+            aggregated,
+            contributions,
         )
         self.t0 = t_start
         self.t1 = t_end
@@ -80,19 +102,31 @@ class MassRateDataSeries(DataSeries):
         return (self.t0 + self.t1) / 2
 
     @classmethod
-    def derive_rates(cls, mass_data: "model.series.MassChangeDataSeries") -> "MassRateDataSeries":
+    def derive_rates(
+        cls, mass_data: "model.series.MassChangeDataSeries"
+    ) -> "MassRateDataSeries":
         t0 = mass_data.t[:-1]
         t1 = mass_data.t[1:]
         dmdt = np.diff(mass_data.mass)
         if mass_data.a is not None:
-            area = (mass_data.a[:-1] + mass_data.a[1:]) / 2.
+            area = (mass_data.a[:-1] + mass_data.a[1:]) / 2.0
         else:
             area = None
 
         return cls(
-            mass_data.user, mass_data.user_group, mass_data.data_group, mass_data.basin_group,
-            mass_data.basin_id, mass_data.basin_area, t0, t1, area, dmdt, mass_data.errs,
-            computed=True, aggregated=mass_data.aggregated
+            mass_data.user,
+            mass_data.user_group,
+            mass_data.data_group,
+            mass_data.basin_group,
+            mass_data.basin_id,
+            mass_data.basin_area,
+            t0,
+            t1,
+            area,
+            dmdt,
+            mass_data.errs,
+            computed=True,
+            aggregated=mass_data.aggregated,
         )
 
     def __len__(self) -> int:
@@ -102,17 +136,21 @@ class MassRateDataSeries(DataSeries):
         return len(self) > 0
 
     @property
+    def freq(self) -> float:
+        return np.mean(np.diff(self.t))
+
+    @property
     def sigma(self) -> float:
-        return math.sqrt(
-            np.nanmean(np.square(self.errs))
-        )  # / math.sqrt(len(self))
+        return math.sqrt(np.nanmean(np.square(self.errs))) / np.sqrt(1.0 / self.freq)
 
     @property
     def mean(self) -> float:
         return np.nanmean(self.dmdt)
 
     @classmethod
-    def merge(cls, a: "MassRateDataSeries", b: "MassRateDataSeries") -> "MassRateDataSeries":
+    def merge(
+        cls, a: "MassRateDataSeries", b: "MassRateDataSeries"
+    ) -> "MassRateDataSeries":
         ia, ib = match(a.t0, b.t0)
 
         if len(a) != len(b):
@@ -122,19 +160,30 @@ class MassRateDataSeries(DataSeries):
 
         t0 = a.t0[ia]
         t1 = a.t1[ia]
-        m = (a.dmdt[ia] + b.dmdt[ib]) / 2.
-        e = np.sqrt((np.square(a.errs[ia]) +
-                     np.square(b.errs[ib])) / 2.)
-        ar = (a.a[ia] + b.a[ib]) / 2.
+        m = (a.dmdt[ia] + b.dmdt[ib]) / 2.0
+        e = np.sqrt((np.square(a.errs[ia]) + np.square(b.errs[ib])) / 2.0)
+        ar = (a.a[ia] + b.a[ib]) / 2.0
 
         comp = a.computed or b.computed
         aggr = a.aggregated or b.aggregated
 
         return cls(
-            a.user, a.user_group, a.data_group, BasinGroup.sheets,
-            a.basin_id, a.basin_area, t0, t1, ar, m, e, comp, merged=True, aggregated=aggr
+            a.user,
+            a.user_group,
+            a.data_group,
+            BasinGroup.sheets,
+            a.basin_id,
+            a.basin_area,
+            t0,
+            t1,
+            ar,
+            m,
+            e,
+            comp,
+            merged=True,
+            aggregated=aggr,
         )
-
+    
     def chunk_rates(self) -> "WorkingMassRateDataSeries":
         ok = self.t0 == self.t1
 
@@ -148,37 +197,66 @@ class MassRateDataSeries(DataSeries):
             errs = errs_chunks[0]
         else:
             for i in range(len(self)):
-                if ok[i]: continue
+                if ok[i]:
+                    continue
 
-                time_chunks.append(
-                    np.asarray([self.t0[i], self.t1[i]])
-                )
-                dmdt_chunks.append(
-                    np.asarray([self.dmdt[i], self.dmdt[i]])
-                )
-                errs_chunks.append(
-                    np.asarray([self.errs[i], self.errs[i]])
-                )
+                time_chunks.append(np.asarray([self.t0[i], self.t1[i]]))
+                dmdt_chunks.append(np.asarray([self.dmdt[i], self.dmdt[i]]))
+                errs_chunks.append(np.asarray([self.errs[i], self.errs[i]]))
             t, dmdt = ts_combine(time_chunks, dmdt_chunks)
             _, errs = ts_combine(time_chunks, errs_chunks, error_method=ErrorMethod.rms)
 
+        tm, dmdt = ts2m(t, dmdt)
+        _, errs = ts2m(t, errs)
+
         return WorkingMassRateDataSeries(
-            self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
-            t, self.a, dmdt, errs, aggregated=self.aggregated
+            self.user,
+            self.user_group,
+            self.data_group,
+            self.basin_group,
+            self.basin_id,
+            self.basin_area,
+            np.round(tm, decimals=4),
+            self.a,
+            dmdt,
+            errs,
+            aggregated=self.aggregated,
         )
 
-    def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
+    def integrate(self, offset: float = None) -> "model.series.MassChangeDataSeries":
         return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
 
 
 class WorkingMassRateDataSeries(DataSeries):
-    def __init__(self, user: Optional[str], user_group: Optional[str], data_group: Optional[str],
-                 basin_group: BasinGroup, basin_id: Basin, basin_area: float, time: np.ndarray, area: np.ndarray,
-                 dmdt: np.ndarray, errs: np.ndarray, computed: bool=False, merged: bool=False, aggregated: bool=False,
-                 contributions: int=1, truncate: Tuple[float, float]=None):
+    def __init__(
+        self,
+        user: Optional[str],
+        user_group: Optional[str],
+        data_group: Optional[str],
+        basin_group: BasinGroup,
+        basin_id: Basin,
+        basin_area: float,
+        time: np.ndarray,
+        area: np.ndarray,
+        dmdt: np.ndarray,
+        errs: np.ndarray,
+        computed: bool = False,
+        merged: bool = False,
+        aggregated: bool = False,
+        contributions: int = 1,
+        truncate: Tuple[float, float] = None,
+    ):
         super().__init__(
-            user, user_group, data_group, basin_group, basin_id, basin_area,
-            computed, merged, aggregated, contributions
+            user,
+            user_group,
+            data_group,
+            basin_group,
+            basin_id,
+            basin_area,
+            computed,
+            merged,
+            aggregated,
+            contributions,
         )
         self.t = time
         self.a = area
@@ -192,6 +270,14 @@ class WorkingMassRateDataSeries(DataSeries):
         start, end = self.trunc_extent
         return self.truncate(start, end)
 
+    def min_rate_time(self) -> float:
+        i = np.nanargmin(self.dmdt)
+        return self.t[i]
+
+    def max_rate_time(self) -> float:
+        i = np.nanargmax(self.dmdt)
+        return self.t[i]
+
     @property
     def min_rate(self) -> float:
         ok = np.isfinite(self.dmdt)
@@ -203,10 +289,24 @@ class WorkingMassRateDataSeries(DataSeries):
         return np.max(self.dmdt[ok])
 
     @property
+    def min_error(self) -> float:
+        ok = np.isfinite(self.errs)
+        return np.min(self.errs[ok])
+
+    @property
+    def max_error(self) -> float:
+        ok = np.isfinite(self.errs)
+        return np.max(self.errs[ok])
+
+    @property
+    def freq(self) -> float:
+        return np.mean(np.diff(self.t))
+
+    @property
     def sigma(self) -> float:
-        return math.sqrt(
-            np.nanmean(np.square(self.errs))
-        )  # / math.sqrt(len(self))
+        return math.sqrt(np.nanmean(np.square(self.errs))) / np.sqrt(
+            self.t.max() - self.t.min()
+        )  # np.sqrt(1. / self.freq)
 
     @property
     def mean(self) -> float:
@@ -218,28 +318,112 @@ class WorkingMassRateDataSeries(DataSeries):
     def _get_max_time(self) -> float:
         return np.max(self.t)
 
-    def _set_min_time(self, min_t: float) -> None:
+    def _set_min_time(self, min_t: float, interp: bool = True) -> None:
+        if min_t < self.t.min():
+            return
+
         ok = self.t >= min_t
 
-        self.t = self.t[ok]
-        self.dmdt = self.dmdt[ok]
+        if interp:
+            # interpolate values @ new minimum
+            new_dmdt = np.interp(min_t, self.t, self.dmdt)
+            new_errs = np.interp(min_t, self.t, self.errs)
+
+            self.t = np.hstack((min_t, self.t[ok]))
+            self.dmdt = np.hstack((new_dmdt, self.dmdt[ok]))
+            self.errs = np.hstack((new_errs, self.errs[ok]))
+        else:
+            self.t = self.t[ok]
+            self.dmdt = self.dmdt[ok]
+            self.errs = self.errs[ok]
         # if self.a is not None:
         #     self.a = self.a[ok]
-        self.errs = self.errs[ok]
 
-    def _set_max_time(self, max_t: float) -> None:
-        ok = self.t <= max_t
+    def _set_max_time(self, max_t: float, interp: bool = True) -> None:
+        if max_t > self.t.max():
+            return
 
-        self.t = self.t[ok]
-        self.dmdt = self.dmdt[ok]
-        # if self.a is not None:
-        #     self.a = self.a[ok]
-        self.errs = self.errs[ok]
+        ok = self.t < max_t
 
-    def integrate(self, offset: float=None) -> "model.series.MassChangeDataSeries":
-        return model.series.MassChangeDataSeries.accumulate_mass(self, offset=offset)
+        if interp:
+            new_dmdt = np.interp(max_t, self.t, self.dmdt)
+            new_errs = np.interp(max_t, self.t, self.errs)
 
-    def reduce(self, interval: float=1.) -> "WorkingMassRateDataSeries":
+            self.t = np.hstack((self.t[ok], max_t))
+            self.dmdt = np.hstack((self.dmdt[ok], new_dmdt))
+            self.errs = np.hstack((self.errs[ok], new_errs))
+        else:
+            self.t = self.t[ok]
+            self.dmdt = self.dmdt[ok]
+            self.errs = self.errs[ok]
+
+    def integrate(
+        self, offset: float = None, align: "MassChangeDataSeries" = None
+    ) -> "model.series.MassChangeDataSeries":
+        return model.series.MassChangeDataSeries.accumulate_mass(
+            self, offset=offset, ref_series=align
+        )
+
+    def round_dates(self) -> None:
+        self.t = np.round(self.t, decimals=5)
+
+    def monthly(self) -> "WorkingMassRateDataSeries":
+        tm, dmdt = ts2m(self.t, self.dmdt)
+        _, errs = ts2m(self.t, self.errs)
+
+        return WorkingMassRateDataSeries(
+            self.user,
+            self.user_group,
+            self.data_group,
+            self.basin_group,
+            self.basin_id,
+            self.basin_area,
+            np.round(tm, decimals=4),
+            self.a,
+            dmdt,
+            errs,
+            aggregated=self.aggregated,
+        )
+
+    def reduce(
+        self,
+        interval: float = 1.0,
+        centre=None,
+        backfill: bool = False,
+        interp: bool = False,
+    ) -> "WorkingMassRateDataSeries":
+
+        if len(self) == 0:
+            return self
+
+        mean_diff = np.mean(np.diff(self.t))
+        if mean_diff >= interval:
+            half_i = interval / 2.0
+            t_new = np.arange(self.t.min() + half_i, self.t.max() - half_i, interval)
+            dmdt_interp = interp1d(
+                self.t, self.dmdt, kind="nearest", fill_value="extrapolate"
+            )
+            errs_interp = interp1d(
+                self.t, self.errs, kind="nearest", fill_value="extrapolate"
+            )
+            dmdt = dmdt_interp(t_new)
+            errs = errs_interp(t_new)
+
+            return WorkingMassRateDataSeries(
+                self.user,
+                self.user_group,
+                self.data_group,
+                self.basin_group,
+                self.basin_id,
+                self.basin_area,
+                t_new,
+                self.a,
+                dmdt,
+                errs,
+                aggregated=self.aggregated,
+                computed=self.computed,
+                truncate=self.trunc_extent,
+            )
 
         breaks = np.hstack(([0], np.argwhere(np.isnan(self.dmdt)).flat, [-1]))
         all_windows_dmdt = []
@@ -249,39 +433,70 @@ class WorkingMassRateDataSeries(DataSeries):
         for start, final in zip(breaks[:-1], breaks[1:]):
             if start + 1 == final:
                 continue
+            is_last = final == -1
 
             min_t = self.t[start]
             max_t = self.t[final]
 
             # min_t = self.t.min()
             # max_t = self.t.max()
-            half_i = interval / 2.
+            half_i = interval / 2.0
 
-            t_new = np.arange(min_t+half_i, max_t-half_i, interval)
-            t_new = np.hstack((t_new, [max_t-half_i]))
+            if centre is None:
+                t_new = np.arange(min_t + half_i, max_t - half_i, interval)
+                t_new = np.hstack((t_new, [max_t - half_i]))
+            else:
+                start = np.floor(min_t) if min_t - np.floor(min_t) < centre else np.ceil(min_t)
+                t_new = np.arange(start + centre, np.floor(max_t), interval)
 
-            n_points_out = len(t_new)
-            n_max_window = len(self)
+            if interp:
+                window_dmdt = np.interp(t_new, self.t, self.dmdt)
+                window_errs = np.interp(t_new, self.t, self.errs)
+                window_t = t_new
+            else:
+                n_points_out = len(t_new)
+                n_max_window = len(self)
 
-            window_dmdt = np.empty((n_points_out, n_max_window))
-            window_errs = np.empty((n_points_out, n_max_window))
+                window_dmdt = np.empty((n_points_out, n_max_window))
+                window_errs = np.empty((n_points_out, n_max_window))
 
-            for i, t in enumerate(t_new):
-                w_start = t-half_i
-                w_final = t+half_i
+                for i, t in enumerate(t_new):
+                    w_start = t - half_i
+                    w_final = t + half_i
 
-                w_mask = np.logical_and(w_start <= self.t, self.t < w_final)
-                window_dmdt[i, :] = np.where(w_mask, self.dmdt, np.nan)
-                window_errs[i, :] = np.where(w_mask, self.errs, np.nan)
-            window_dmdt = np.hstack(
-                (np.nanmean(window_dmdt, axis=1), [np.nan])
-            )
-            window_errs = np.hstack(
-                (np.nanmean(window_errs, axis=1), [np.nan])
-            )
-            window_t = np.hstack(
-                (t_new, [max_t+half_i])
-            )
+                    w_mask = np.logical_and(w_start <= self.t, self.t < w_final)
+                    window_dmdt[i, :] = np.where(w_mask, self.dmdt, np.nan)
+                    window_errs[i, :] = np.where(w_mask, self.errs, np.nan)
+
+                window_dmdt = np.nanmean(window_dmdt, axis=1)
+                window_errs = np.nanmean(window_errs, axis=1)
+                window_t = t_new
+
+            if backfill:
+                t_backfill = np.arange(min_t, max_t, 1.0 / 12.0)
+                t_backfill = np.hstack((t_backfill, [max_t]))
+
+                if window_t.size == 1:
+                    window_dmdt = np.ones_like(t_backfill) * window_dmdt
+                    window_errs = np.ones_like(t_backfill) * window_errs
+                else:
+                    dmdt_interp = interp1d(
+                        window_t, window_dmdt, kind="nearest", fill_value="extrapolate"
+                    )
+                    errs_interp = interp1d(
+                        window_t, window_errs, kind="nearest", fill_value="extrapolate"
+                    )
+                    window_dmdt = dmdt_interp(t_backfill)
+                    window_errs = errs_interp(t_backfill)
+                window_t, window_dmdt = ts2m(t_backfill, window_dmdt)
+                _, window_errs = ts2m(t_backfill, window_errs)
+
+            if not is_last:
+                # add extra NaN record to create break
+                window_dmdt = np.hstack((window_dmdt, [np.nan]))
+                window_errs = np.hstack((window_errs, [np.nan]))
+                window_t = np.hstack((window_t, [max_t + half_i]))
+
             all_windows_dmdt.append(window_dmdt)
             all_windows_errs.append(window_errs)
             all_windows_t.append(window_t)
@@ -291,12 +506,25 @@ class WorkingMassRateDataSeries(DataSeries):
         t_new = np.hstack(all_windows_t)
 
         return WorkingMassRateDataSeries(
-            self.user, self.user_group, self.data_group, self.basin_group, self.basin_id, self.basin_area,
-            t_new, self.a, dmdt, errs, aggregated=self.aggregated, computed=self.computed, truncate=self.trunc_extent
+            self.user,
+            self.user_group,
+            self.data_group,
+            self.basin_group,
+            self.basin_id,
+            self.basin_area,
+            t_new,
+            self.a,
+            dmdt,
+            errs,
+            aggregated=self.aggregated,
+            computed=self.computed,
+            truncate=self.trunc_extent,
         )
 
     @classmethod
-    def merge(cls, a: "WorkingMassRateDataSeries", b: "WorkingMassRateDataSeries") -> "WorkingMassRateDataSeries":
+    def merge(
+        cls, a: "WorkingMassRateDataSeries", b: "WorkingMassRateDataSeries"
+    ) -> "WorkingMassRateDataSeries":
         ia, ib = match(a.t, b.t)
 
         if len(a) != len(b):
@@ -305,34 +533,119 @@ class WorkingMassRateDataSeries(DataSeries):
             return None
 
         t = a.t[ia]
-        m = (a.dmdt[ia] + b.dmdt[ib]) / 2.
-        e = np.sqrt((np.square(a.errs[ia]) +
-                     np.square(b.errs[ib])) / 2.)
-        # ar = (a.a[ia] + b.a[ib]) / 2.
+        m = (a.dmdt[ia] + b.dmdt[ib]) / 2.0
+        e = np.sqrt((np.square(a.errs[ia]) + np.square(b.errs[ib])) / 2.0)
         ar = None
 
         comp = a.computed or b.computed
         aggr = a.aggregated or b.aggregated
 
+        if a.trunc_extent is None and b.trunc_extent is None:
+            trunc = None
+        elif a.trunc_extent is None:
+            trunc = b.trunc_extent
+        elif b.trunc_extent is None:
+            trunc = a.trunc_extent
+        else:
+            a_min, a_max = a.trunc_extent
+            b_min, b_max = b.trunc_extent
+            trunc = min(a_min, b_min), max(a_max, b_max)
+
         return cls(
-            a.user, a.user_group, a.data_group, BasinGroup.sheets,
-            a.basin_id, a.basin_area, t, ar, m, e, comp, merged=True, aggregated=aggr
+            a.user,
+            a.user_group,
+            a.data_group,
+            BasinGroup.sheets,
+            a.basin_id,
+            a.basin_area,
+            t,
+            ar,
+            m,
+            e,
+            comp,
+            merged=True,
+            aggregated=aggr,
+            truncate=trunc,
         )
 
     @classmethod
-    def from_dm(cls, mass_series: "model.series.MassChangeDataSeries", truncate: bool=True, window: float=1.,
-                method: LSQMethod=LSQMethod.normal) -> "WorkingMassRateDataSeries":
-        dmdt, dmdt_err = dm_to_dmdt(
-            mass_series.t, mass_series.mass, mass_series.errs,
-            window, truncate=truncate, lsq_method=method
-        )
-        if truncate:
-            finite_indicies = np.flatnonzero(
-                np.isfinite(dmdt)
-            )
+    def from_dm(
+        cls,
+        mass_series: "model.series.MassChangeDataSeries",
+        truncate: bool = True,
+        window: float = 1.0,
+        method: LSQMethod = LSQMethod.normal,
+        tapering: bool = False,
+        monthly: bool = False,
+    ) -> "WorkingMassRateDataSeries":
+        tout = t2m(mass_series.t) if monthly else None
 
-            first_valid = finite_indicies.min()
-            final_valid = finite_indicies.max()
+        try:
+            t, dmdt, dmdt_err = dm_to_dmdt(
+                mass_series.t,
+                mass_series.mass,
+                mass_series.errs,
+                window,
+                tout=tout,
+                truncate=truncate,
+                lsq_method=method,
+                tapering=tapering,
+            )
+        except Exception as e:
+            t = mass_series.t
+            dmdt = np.ones_like(mass_series.t) * np.nan
+            dmdt_err = np.ones_like(mass_series.t) * np.nan
+            print("ERROR:", mass_series.user, mass_series.basin_id.value)
+            print(e)
+        if truncate:
+            finite_indicies = np.flatnonzero(np.isfinite(dmdt))
+            if not finite_indicies.size:
+                crop_to = None
+
+            else:
+
+                first_valid = finite_indicies.min()
+                final_valid = finite_indicies.max()
+
+                dmdt[:first_valid] = dmdt[first_valid]
+                dmdt[final_valid:] = dmdt[final_valid]
+
+                dmdt_err[:first_valid] = dmdt_err[first_valid]
+                dmdt_err[final_valid:] = dmdt_err[final_valid]
+
+                crop_to = t[first_valid], t[final_valid]
+        else:
+            crop_to = None
+
+        return cls(
+            mass_series.user,
+            mass_series.user_group,
+            mass_series.data_group,
+            mass_series.basin_group,
+            mass_series.basin_id,
+            mass_series.basin_area,
+            t,
+            mass_series.a,
+            dmdt,
+            dmdt_err,
+            computed=True,
+            truncate=crop_to,
+        )
+
+    def smooth(
+        self, window: float = 13.0 / 12, clip=False, taper=False, iters=1
+    ) -> "WorkingMassRateDataSeries":
+        if window is None:
+            return self
+
+        dmdt = smooth_imbie(self.t, self.dmdt, window, iters)
+        dmdt_err = smooth_imbie(self.t, self.errs, window, iters)
+
+        if clip:
+            margin = window / 2.0
+
+            first_valid = np.argwhere(self.t < self.t.min() + margin).max()
+            final_valid = np.argwhere(self.t > self.t.max() - margin).min()
 
             dmdt[:first_valid] = dmdt[first_valid]
             dmdt[final_valid:] = dmdt[final_valid]
@@ -340,24 +653,38 @@ class WorkingMassRateDataSeries(DataSeries):
             dmdt_err[:first_valid] = dmdt_err[first_valid]
             dmdt_err[final_valid:] = dmdt_err[final_valid]
 
-            crop_to = mass_series.t[first_valid], mass_series.t[final_valid]
+            crop_to = self.t[first_valid], self.t[final_valid]
+        elif taper:
+            margin = window // 2
+
+            first_valid = np.argwhere(self.t < self.t.min() + margin).max()
+            final_valid = np.argwhere(self.t > self.t.max() - margin).min()
+
+            dmdt[:first_valid] = np.mean(self.dmdt[:first_valid])
+            dmdt[final_valid:] = np.mean(self.dmdt[final_valid:])
+
+            dmdt_err[:first_valid] = np.mean(self.errs[:first_valid])
+            dmdt_err[final_valid:] = np.mean(self.errs[final_valid:])
+
+            crop_to = None
         else:
             crop_to = None
 
-        return cls(
-            mass_series.user, mass_series.user_group, mass_series.data_group, mass_series.basin_group,
-            mass_series.basin_id, mass_series.basin_area, mass_series.t, mass_series.a, dmdt, dmdt_err,
-            computed=True, truncate=crop_to
-        )
-
-    def smooth(self, window: float=13./12, clip=False) -> "WorkingMassRateDataSeries":
-        # dmdt = move_av(window, self.dmdt, self.t, clip=clip)
-        dmdt = smooth_imbie(self.t, self.dmdt, window)
-
         return WorkingMassRateDataSeries(
-            self.user, self.user_group, self.data_group, self.basin_group,
-            self.basin_id, self.basin_area, self.t, self.a, dmdt, self.errs,
-            self.computed, self.merged, self.aggregated
+            self.user,
+            self.user_group,
+            self.data_group,
+            self.basin_group,
+            self.basin_id,
+            self.basin_area,
+            self.t,
+            self.a,
+            dmdt,
+            dmdt_err,
+            self.computed,
+            self.merged,
+            self.aggregated,
+            truncate=crop_to,
         )
 
     def __len__(self) -> int:
@@ -366,11 +693,27 @@ class WorkingMassRateDataSeries(DataSeries):
     def chunk_rates(self):
         return self
 
-    def truncate(self, min_time: float, max_time: float) -> "WorkingMassRateDataSeries":
+    def truncate(
+        self, min_time: float, max_time: float, interp: bool = True
+    ) -> "WorkingMassRateDataSeries":
         trunc = self.__class__(
-            self.user, self.user_group, self.data_group, self.basin_group,
-            self.basin_id, self.basin_area, self.t, self.a, self.dmdt, self.errs,
-            self.computed, self.merged, self.aggregated
+            self.user,
+            self.user_group,
+            self.data_group,
+            self.basin_group,
+            self.basin_id,
+            self.basin_area,
+            self.t,
+            self.a,
+            self.dmdt,
+            self.errs,
+            self.computed,
+            self.merged,
+            self.aggregated,
         )
-        trunc.limit_times(min_time, max_time)
+        trunc.limit_times(min_time, max_time, interp=interp)
+
+        if len(trunc.t) == 0:
+            print(trunc.user, trunc.basin_id.value)
+            print(min_time, max_time, self.t)
         return trunc

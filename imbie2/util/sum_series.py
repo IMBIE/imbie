@@ -16,7 +16,7 @@ def sum_series(ts, data, ret_mask=False):
 
     for i, times in enumerate(ts):
         tm, dm = ts2m(times, data[i])
-        i1, i2 = match(t, tm, 1e-8)
+        i1, i2 = match(t, tm, 1e-4)
         out[i1] += dm[i2]
 
         min_tm = np.min(tm)

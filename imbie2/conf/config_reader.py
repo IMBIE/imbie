@@ -12,6 +12,9 @@ from imbie2.const.error_methods import ErrorMethod
 from imbie2.const.table_formats import TableFormat
 from imbie2.const.lsq_methods import LSQMethod
 
+import matplotlib.pyplot as plt
+format_opts = list(plt.gcf().canvas.get_supported_filetypes().keys())
+
 
 class ConfigFile:
 
@@ -68,7 +71,7 @@ class ImbieConfig(ConfigFile):
     input_path = ConfigParam("input_path", str)
     output_path = ConfigParam("output_path", str)
 
-    plot_format = ConfigParam("plot_format", str, options=["png", "jpg", "svg", "pdf"], optional=True)
+    plot_format = ConfigParam("plot_format", str, options=format_opts, optional=True)
     table_format = ConfigParam("table_format", TableFormat, default=TableFormat.fancy)
 
     start_date = ConfigParam("start_date", float, optional=True)
@@ -86,6 +89,7 @@ class ImbieConfig(ConfigFile):
     align_date = ConfigParam("align_date", float, optional=True)
     average_nsigma = ConfigParam("average_nsigma", float, optional=True)
     plot_smooth_window = ConfigParam("plot_smooth_window", float, optional=True)
+    plot_smooth_iters = ConfigParam("plot_smooth_iters", int, optional=True)
 
     export_data = ConfigParam("export_data", bool, default=False)
     include_la = ConfigParam("enable_la_group", bool, default=False)
@@ -98,8 +102,27 @@ class ImbieConfig(ConfigFile):
     dmdt_window = ConfigParam("dmdt_window", float, default=1.)
     dmdt_method = ConfigParam("dmdt_method", LSQMethod, default=LSQMethod.normal)
     truncate_dmdt = ConfigParam("truncate_dmdt", bool, default=True)
+    truncate_avg = ConfigParam("truncate_avg", bool, default=False)
+    apply_dmdt_smoothing = ConfigParam('apply_dmdt_smoothing', bool, default=True)
 
     reduce_window = ConfigParam("reduce_window", float, optional=True)
+    data_smoothing_window = ConfigParam("data_smoothing_window", float, optional=True)
+    data_smoothing_iters = ConfigParam("data_smoothing_iters", int, optional=True)
+    export_smoothing_window = ConfigParam("export_smoothing_window", float, optional=True)
+    export_smoothing_iters = ConfigParam("export_smoothing_iters", int, optional=True)
+    imbie1_compare = ConfigParam("imbie1_compare", bool, default=True)
+
+    output_timestep = ConfigParam("output_timestep", float, optional=True)
+    output_offset = ConfigParam("output_offset", float, optional=True)
+
+    smb_data_path = ConfigParam("smb_data", str, optional=True)
+    discharge_data_path = ConfigParam("discharge_data", str, optional=True)
+
+    data_min_time = ConfigParam("data_min_time", float, optional=True)
+    data_max_time = ConfigParam("data_max_time", float, optional=True)
+
+    dmdt_tapering = ConfigParam("dmdt_tapering", bool, default=False)
+    dmdt_monthly = ConfigParam("dmdt_monthly", bool, default=False)
 
     def read(self, fileobj) -> None:
         super().read(fileobj)

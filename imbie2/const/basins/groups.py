@@ -5,3 +5,4 @@ class BasinGroup(enum.Enum):
     rignot = 'rignot'
     zwally = 'zwally'
     sheets = 'sheets'
+    mean = 'mean'

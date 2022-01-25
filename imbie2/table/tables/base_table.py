@@ -26,10 +26,10 @@ class Table(PrettyTable):
         IceSheet.wais: "West Antarctica",
         IceSheet.eais: "East Antarctica",
         IceSheet.apis: "Antarctic Peninsula",
-        IceSheet.gris: "Greenland"
+        IceSheet.gris: "Greenland",
     }
 
-    def __init__(self, *field_names, style: TableFormat=TableFormat.fancy, **kwargs):
+    def __init__(self, *field_names, style: TableFormat = TableFormat.fancy, **kwargs):
         super().__init__(field_names=field_names, **kwargs)
 
         if style == TableFormat.msword:
@@ -47,7 +47,7 @@ class Table(PrettyTable):
 
         :param filename: the path to the file
         """
-        with open(filename, 'w', encoding="utf-8") as f:
+        with open(filename, "w", encoding="utf-8") as f:
             f.write(self.get_string(**kwargs))
 
     def default_extension(self) -> str:
@@ -63,11 +63,18 @@ class Table(PrettyTable):
 
     def get_string(self, **kwargs) -> str:
         if self._format == TableFormat.html:
-            return self.get_html_string().encode('ascii', 'xmlcharrefreplace').decode('ascii')
+            return (
+                self.get_html_string()
+                .encode("ascii", "xmlcharrefreplace")
+                .decode("ascii")
+            )
 
         elif self._format == TableFormat.csv:
             # create header line
-            string = ",".join([field.replace('\n', ' ') for field in self._get_field_names()]) + "\n"
+            string = (
+                ",".join([field.replace("\n", " ") for field in self.field_names])
+                + "\n"
+            )
 
             # iterate over rows of data
             for row in self:
@@ -77,8 +84,10 @@ class Table(PrettyTable):
 
                 # create comma-separated line of data
                 line = ",".join(
-                    [row.get_string(fields=[field]).strip().replace('\n', '') for
-                       field in self._get_field_names()]
+                    [
+                        row.get_string(fields=[field]).strip().replace("\n", "")
+                        for field in self.field_names
+                    ]
                 )
                 string += line + "\n"
             return string
