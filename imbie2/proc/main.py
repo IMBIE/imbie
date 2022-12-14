@@ -111,5 +111,6 @@ def main():
         data = [mass_mgr.as_collection(), rate_mgr.as_collection()]
     else:
         data = [rate_mgr.as_collection()]
+
     # process the data
     process(data, config, overwrite=args.overwrite)

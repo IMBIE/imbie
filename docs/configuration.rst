@@ -113,8 +113,9 @@ The list of options are:
   mean are considered to be outliers, and omitted from the average. By default, there is no
   maximum margin and all values will contribute to the average.
 
-* `users_skip` – Optional field. A list of contributions (specified by the contributer’s username)
-  to exclude from the analysis. Multiple usernames can be specified, separated by whitespace.
+* `users_skip` – Optional field. A list of contributions (specified by the contributer’s username,
+  with all capital letters, accents or diacritic marks removed, eg 'Sørensen' should be written
+  'sorensen') to exclude from the analysis. Multiple usernames can be specified, separated by whitespace.
 
 * `users_mark` – Optional field. A list of contributions (specified by the contributer’s surname)
   to mark in dM/dt and dM time-series plots. Multiple usernames can be specified, separated by
@@ -212,3 +213,65 @@ The list of options are:
 
 * `dmdt_monthly` – Optional field. Forces monthly interpolation of data points when performing
   dm-to-dmdt conversion when set to True. Default False.
+
+The default axis limits can be changed for certain plots only, using the following six options.
+This affects only plots whose names start with group_rate_boxes, groups_mass_intercomparison,
+groups_rate_intercomparison, regions_mass_intercomparison and regions_rate_intercomparison.
+
+* `plotter_min_time` – Optional field. Sets earliest date in plot time range. Default if omitted is 1990.
+
+* `plotter_max_time` – Optional field. Sets latest date in plot time range. Default if omitted is 2022.
+
+* `plotter_min_dmdt` – Optional field. Sets lowest value in plot dm/dt range. Default if omitted is ``-``500 (Gt/yr).
+
+* `plotter_max_dmdt` – Optional field. Sets highest value in plot dm/dt range. Default if omitted is 200 (Gt/yr)
+
+* `plotter_min_dm` – Optional field. Sets lowest value in plot dm range. Default if omitted is ``-``9000 (Gt)
+
+* `plotter_max_dm` – Optional field. Sets highest value in plot dm range. Default if omitted is 3000 (Gt)
+
+
+  
+
+Example configuration file - used for IMBIE 3
+=============================================
+
+input_path "/home/xxx/imbie_2022_analysis/data/submissions/"
+output_path "/home/xxx/imbie_2022_analysis/outputs/imbie3/"
+plot_format "png"
+
+data_min_time 1971
+data_max_time 2023
+
+export_data True
+
+use_dm True
+dmdt_window 3
+dmdt_method "weighted_least_squares"
+truncate_dmdt False
+truncate_avg False
+apply_dmdt_smoothing True
+
+reduce_window 1
+
+combine_method "inv"
+group_avg_error_method "rms"
+sheet_avg_error_method "max"
+sum_errors_method "rss"
+table_format "html"
+bar_plot_min_time 1971
+bar_plot_max_time 2023
+plot_smooth_window 1.083333
+plot_smooth_iters 2
+
+imbie1_compare False
+
+dmdt_monthly True
+dmdt_tapering True
+
+plotter_min_time 1971.0
+plotter_max_time 2023.0
+plotter_min_dmdt -600
+plotter_max_dmdt 300
+plotter_min_dm -10000
+plotter_max_dm 4000

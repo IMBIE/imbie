@@ -124,6 +124,16 @@ class ImbieConfig(ConfigFile):
     dmdt_tapering = ConfigParam("dmdt_tapering", bool, default=False)
     dmdt_monthly = ConfigParam("dmdt_monthly", bool, default=False)
 
+    #### IMBIE3 update: new params allow changing of the defaults in the Plotter class
+    #### only affects certain plots, ie group_rate_boxes, groups_mass_intercomparison,
+    #### groups_rate_intercomparison, regions_mass_intercomparison and regions_rate_intercomparison
+    plotter_min_time = ConfigParam("plotter_min_time", float, optional=True)
+    plotter_max_time = ConfigParam("plotter_max_time", float, optional=True)
+    plotter_min_dmdt = ConfigParam("plotter_min_dmdt", float, optional=True)
+    plotter_max_dmdt = ConfigParam("plotter_max_dmdt", float, optional=True)
+    plotter_min_dm = ConfigParam("plotter_min_dm", float, optional=True)
+    plotter_max_dm = ConfigParam("plotter_max_dm", float, optional=True)
+
     def read(self, fileobj) -> None:
         super().read(fileobj)
 

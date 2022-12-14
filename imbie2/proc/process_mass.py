@@ -116,7 +116,10 @@ def process_mass(mass_data: MassChangeCollection, config: ImbieConfig):
         print(tct)
 
     # draw plots
-    plotter = Plotter(filetype=config.plot_format, path=config.output_path)
+    #### IMBIE3 update: added config file to pass on plot defaults
+    
+    plotter = Plotter(filetype=config.plot_format, path=config.output_path, config=config)
+    
     # intracomparisons
     for group in groups:
         plotter.group_rate_intracomparison(

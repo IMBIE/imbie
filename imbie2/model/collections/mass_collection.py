@@ -151,9 +151,12 @@ class MassChangeCollection(Collection):
         monthly: bool = False,
     ) -> "model.collections.WorkingMassRateCollection":
         out = model.collections.WorkingMassRateCollection()
+
+        #### IMBIE3 update - series is not put in collection if
+        #### dm/dt is all NaN, which indicates failure of interpolation
+        
         for series in self:
-            out.add_series(
-                model.series.WorkingMassRateDataSeries.from_dm(
+            test_series=model.series.WorkingMassRateDataSeries.from_dm(
                     series,
                     truncate=truncate,
                     window=window,
@@ -161,7 +164,10 @@ class MassChangeCollection(Collection):
                     tapering=tapering,
                     monthly=monthly,
                 )
-            )
+            if ~np.isnan(test_series.dmdt).all():
+                out.add_series(test_series)
+            else:
+                print('Series ', series.user, series.data_group, series.basin_id, ' removed due to failure to convert dm timeseries to dm/dt timeseries')
         return out
 
     def filter(self, **kwargs) -> "MassChangeCollection":

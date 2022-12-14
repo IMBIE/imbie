@@ -27,7 +27,7 @@ from imbie2.util.combine import weighted_combine as ts_combine
 from imbie2.model.managers import MassChangeCollectionsManager, MassRateCollectionsManager
 from imbie2.model.series import *
 from imbie2.proc.compare_windows import WindowStats
-
+from imbie2.conf import ImbieConfig  #### IMBIE3 update: new config params optionally override Plotter class defaults
 
 def chunk_rates(series):
     ok = series.t0 == series.t1
@@ -144,9 +144,9 @@ def render_plot_with_legend(method):
 
 class Plotter:
     _time0 = 1990
-    _time1 = 2020
-    _dmdt0 = -500 # -900
-    _dmdt1 = 200 # 300
+    _time1 = 2022 #### IMBIE3 update: originally 2020
+    _dmdt0 = -500 #### IMBIE3 update: originally -900
+    _dmdt1 = 200 #### IMBIE3 update: originally 300
     _dm0 = -9000
     _dm1 = 3000
     _set_limits = False
@@ -170,11 +170,32 @@ class Plotter:
         "all": "All"
     }
 
-    def __init__(self, filetype=None, path=None, limits: bool=None):
+    def __init__(self, filetype=None, path=None, config: ImbieConfig=None, limits: bool=None):   #### Added params from config file
         self._ext = filetype
         if path is None:
             path = os.getcwd()
         self._path = os.path.expanduser(path)
+
+        if config is not None:    #### IMBIE3 update: allow change to defaults if new values given in config file
+
+            if config.plotter_min_time is not None:
+                self._time0=config.plotter_min_time
+                self._set_limits = True
+            if config.plotter_max_time is not None:
+                self._time1=config.plotter_max_time
+                self._set_limits = True
+            if config.plotter_min_dmdt is not None:
+                self._dmdt0=config.plotter_min_dmdt
+                self._set_limits = True
+            if config.plotter_max_dmdt is not None:
+                self._dmdt1=config.plotter_max_dmdt
+                self._set_limits = True
+            if config.plotter_min_dm is not None:
+                self._dm0=config.plotter_min_dm
+                self._set_limits = True
+            if config.plotter_max_dm is not None:
+                self._dm1=config.plotter_max_dm
+                self._set_limits = True
 
         if limits is not None:
             self._set_limits = limits
@@ -711,14 +732,19 @@ class Plotter:
                 min_y = y - err
             if max_y is None or y + err > max_y:
                 max_y = y + err
-            # plot error bars
+
+            #### IMBIE3 update: plot error bars, moved group_series truncation to after check
+            # on group_series existence. Original check assumed filter would return
+            # None but actually it returns a collection of length 0.
+                        
             for j, method in enumerate(methods):
                 group_series = group_avgs.filter(
-                    user_group=method, basin_id=sheet
-                ).first().truncate(t_min, t_max)
+                    user_group=method, basin_id=sheet)
 
-                if group_series is None:
+                if len(group_series) == 0:
                     continue
+
+                group_series=group_series.first().truncate(t_min, t_max)
 
                 mean = group_series.mean
                 err = group_series.sigma
@@ -909,7 +935,14 @@ class Plotter:
             "{}-\n{}".format(s.start, s.end) for s in data
         ]
 
-        for group in "RA", "GMB", "IOM":
+        #### IMBIE3 update: Get list of groups used in data - list all groups keys,
+        # flatten the list into an iterator, and find the unique set of keys. Don't
+        # assume all groups contain data.
+
+        group_key_list=[list(s.groups.keys()) for s in data]
+        uniq_group_keys=list(set(mpl.cbook.flatten(group_key_list)))
+        
+        for group in uniq_group_keys:  
             counts = [s.groups[group] for s in data]
             self.ax.bar(
                 xs, counts, .35, bottom=prev,
@@ -1249,7 +1282,15 @@ class Plotter:
             self.ax.plot(x_avg.t, x_avg.dmdt, color=pcol)
 
             for g in groups:
-                g_avg = group_avgs.filter(basin_id=name, user_group=g).first()
+
+                #### IMBIE3 update: changed syntax to check for zero-length filtered group_avgs
+                
+                g_avg = group_avgs.filter(basin_id=name, user_group=g)
+
+                if len(g_avg) == 0:
+                    continue
+                
+                g_avg = g_avg.first()
 
                 pcol = style.colours.primary[g_avg.user_group]
                 scol = style.colours.secondary[g_avg.user_group]
@@ -1317,7 +1358,16 @@ class Plotter:
             self.ax.plot(x_avg.t, x_avg.mass, color=pcol)
 
             for g in groups:
-                g_avg = group_avgs.filter(basin_id=name, user_group=g).first()
+
+                #### IMBIE3 update: changed syntax to check for zero-length filtered group_avgs
+
+                g_avg = group_avgs.filter(basin_id=name, user_group=g)
+
+                if len(g_avg) == 0:
+                    continue
+
+                g_avg = g_avg.first()
+                
                 if align:
                     g_avg = g_avg.align(x_avg)
                 pcol = style.colours.primary[g_avg.user_group]
@@ -1721,7 +1771,15 @@ class Plotter:
                         ax.set_ylabel(y_label)
 
                 if avg is not None:
-                    avg_series = avg.filter(user_group=group, basin_id=sheet).first()
+
+                    #### IMBIE3 update: changed syntax to check for zero-length filtered avg 
+
+                    avg_series = avg.filter(user_group=group, basin_id=sheet)
+
+                    if len(avg_series) == 0:
+                        continue
+
+                    avg_series = avg_series.first()
                     p = ax.plot(avg_series.t, avg_series.dmdt, label='Average', color='grey', lw=7)
 
                     bands = ['#dddddd', '#bbbbbb', '#999999']

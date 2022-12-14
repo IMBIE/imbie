@@ -13,7 +13,6 @@ import imbie2.model as model
 
 from typing import Optional, Tuple
 
-
 class MassRateDataSeries(DataSeries):
     @property
     def min_rate(self) -> None:
@@ -392,7 +391,7 @@ class WorkingMassRateDataSeries(DataSeries):
         backfill: bool = False,
         interp: bool = False,
     ) -> "WorkingMassRateDataSeries":
-
+        
         if len(self) == 0:
             return self
 
@@ -400,9 +399,8 @@ class WorkingMassRateDataSeries(DataSeries):
         if mean_diff >= interval:
             half_i = interval / 2.0
             t_new = np.arange(self.t.min() + half_i, self.t.max() - half_i, interval)
-            dmdt_interp = interp1d(
-                self.t, self.dmdt, kind="nearest", fill_value="extrapolate"
-            )
+            dmdt_interp = interp1d(self.t, self.dmdt, kind="nearest", fill_value="extrapolate")
+            
             errs_interp = interp1d(
                 self.t, self.errs, kind="nearest", fill_value="extrapolate"
             )
@@ -425,7 +423,12 @@ class WorkingMassRateDataSeries(DataSeries):
                 truncate=self.trunc_extent,
             )
 
-        breaks = np.hstack(([0], np.argwhere(np.isnan(self.dmdt)).flat, [-1]))
+        #### IMBIE3 update: Add handler for the case where the timeseries starts with a NaN
+
+        if np.isnan(self.dmdt[0]):
+            breaks = np.hstack((np.argwhere(np.isnan(self.dmdt)).flat, [-1]))
+        else:
+            breaks = np.hstack(([0], np.argwhere(np.isnan(self.dmdt)).flat, [-1]))
         all_windows_dmdt = []
         all_windows_errs = []
         all_windows_t = []
@@ -480,9 +483,7 @@ class WorkingMassRateDataSeries(DataSeries):
                     window_dmdt = np.ones_like(t_backfill) * window_dmdt
                     window_errs = np.ones_like(t_backfill) * window_errs
                 else:
-                    dmdt_interp = interp1d(
-                        window_t, window_dmdt, kind="nearest", fill_value="extrapolate"
-                    )
+                    dmdt_interp = interp1d(window_t, window_dmdt, kind="nearest", fill_value="extrapolate")
                     errs_interp = interp1d(
                         window_t, window_errs, kind="nearest", fill_value="extrapolate"
                     )

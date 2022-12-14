@@ -24,6 +24,7 @@ from imbie2.util.functions import ts2m, match, move_av
 from imbie2.util.discharge import calculate_discharge
 from imbie2.model.series import WorkingMassRateDataSeries, MassChangeDataSeries
 
+
 def prepare_collection(collection: Union[MassRateCollection, MassChangeCollection],
                        config: ImbieConfig) -> WorkingMassRateCollection:
     """
@@ -62,13 +63,6 @@ def prepare_collection(collection: Union[MassRateCollection, MassChangeCollectio
             truncate=config.truncate_dmdt, window=config.dmdt_window, method=config.dmdt_method,
             tapering=config.dmdt_tapering, monthly=config.dmdt_monthly
         )
-        for user in "Blazquez", "Groh":
-            fpath = os.path.join(config.output_path, f"{user}_breakpoint.csv")
-            with open(fpath, "w") as f:
-                sheets = [IceSheet.ais, IceSheet.gris, IceSheet.wais, IceSheet.apis, IceSheet.eais]
-                for s in out.filter(user=user, basin_id=sheets):
-                    for t, dmdt, sigma in zip(s.t, s.dmdt, s.errs):
-                        print(s.user, s.basin_id.value, t, dmdt, sigma, sep=",", file=f)
 
         if config.data_min_time is not None or config.data_max_time is not None:
             out = out.get_window(config.data_min_time, config.data_max_time)
@@ -401,7 +395,7 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection,
             region_rate.integrate(offset=offset)
         )
         print("done.")
-
+        
     # calculate dicharge
     gris_rate = regions_rate.filter(basin_id=IceSheet.gris).first()
     gris_mass = regions_mass.filter(basin_id=IceSheet.gris).first()
@@ -942,7 +936,8 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection,
     # draw plots
     plotter = Plotter(
         filetype=config.plot_format,
-        path=output_path
+        path=output_path,
+        config=config                      #### IMBIE3 update: added config to pass on plot defaults
     )
     for dataset in input_data + [rate_data]:
         for series in dataset:
@@ -1035,7 +1030,8 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection,
         mass_data.filter(basin_id=IceSheet.gris), rate_data.filter(basin_id=IceSheet.gris), ordered_gris_names
     )
 
-    dmdt_comparison_plot = False # disable dM/dt vs recovered dM/dt comparisons
+    dmdt_comparison_plot = False # disable dM/dt vs recovered dM/dt comparisons (in block below)
+
     if len(input_data) == 2 and dmdt_comparison_plot:
         from functools import partial
         prepare = partial(prepare_collection, config=config)
@@ -1338,7 +1334,11 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection,
 
     groups_gris = groups_regions_rate.filter(basin_id=IceSheet.gris)
 
-    for g in groups:
+    #### IMBIE3 update: check for groups used in datasets, only cycle through those present 
+
+    groups_present=[g.user_group for g in groups_gris]
+    
+    for g in groups_present:
         t, g_sig1, tot = count_tolerance(
             gris_data.filter(user_group=g),
             groups_gris.filter(user_group=g).first(),
@@ -1449,25 +1449,37 @@ def process(input_data: Sequence[Union[MassRateCollection, MassChangeCollection,
                 group_data = data_window.filter(user_group=g)
                 avg = avgs_window.filter(user_group=g).first()
 
-            grid = np.empty((avg.t.size, len(group_data))) * np.nan
+            #### IMBIE3 update: check for an instance of the group, if none, then set all table outputs to NaN
 
-            for i, s in enumerate(group_data):
-                s_dmdt = np.interp(avg.t, s.t, s.dmdt, left=np.nan, right=np.nan)
-                grid[:, i] = s_dmdt
+            if avg is not None:
+                avg_mean=avg.mean
+                avg_sigma=avg.sigma
 
-            print('epochs:', avg.t.size, 'members:', len(group_data))
-            print(np.nanmax(grid, axis=1).shape)
+                grid = np.empty((avg.t.size, len(group_data))) * np.nan
 
-            group_range = np.nanmean(
-                np.nanmax(grid, axis=1) - np.nanmin(grid, axis=1)
-            )
-            group_sd = np.nanmean(
-                np.nanstd(grid, axis=1)
-            )
+                for i, s in enumerate(group_data):
+                    s_dmdt = np.interp(avg.t, s.t, s.dmdt, left=np.nan, right=np.nan)
+                    grid[:, i] = s_dmdt
 
+                    print('epochs:', avg.t.size, 'members:', len(group_data))
+                    print(np.nanmax(grid, axis=1).shape)
+
+                group_range = np.nanmean(
+                    np.nanmax(grid, axis=1) - np.nanmin(grid, axis=1)
+                )
+                group_sd = np.nanmean(
+                    np.nanstd(grid, axis=1)
+                )
+
+            else:
+                avg_mean=np.nan
+                avg_sigma=np.nan
+                group_sd=np.nan
+                group_range=np.nan
+                
             line = [
                 name,
-                '%.2f +/- %.2f' % (avg.mean, avg.sigma),
+                '%.2f +/- %.2f' % (avg_mean, avg_sigma),
                 '%.2f' % group_sd, '%.2f' % group_range
             ]
             f.write(','.join(line) + '\n')
